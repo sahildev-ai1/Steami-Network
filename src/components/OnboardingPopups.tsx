@@ -40,23 +40,44 @@ const SK_SESSION    = 'steami_ob_session'; // sessionStorage flag — lives per 
 // localStorage persists. On a fresh session we clear phase & lastClose so the
 // 25-second timer always starts from zero — even if the user left mid-sequence.
 // SK_DONE (signed-up flag) is intentionally never cleared here.
-if (typeof window !== 'undefined' && !sessionStorage.getItem(SK_SESSION)) {
-  localStorage.removeItem(SK_PHASE);
-  localStorage.removeItem(SK_LAST_CLOSE);
-  sessionStorage.setItem(SK_SESSION, '1');
+if (typeof window !== 'undefined' && !ssGet(SK_SESSION)) {
+  lsRemove(SK_PHASE);
+  lsRemove(SK_LAST_CLOSE);
+  ssSet(SK_SESSION, '1');
 }
 
-function getPhase(): number     { return parseInt(localStorage.getItem(SK_PHASE) ?? '0', 10); }
-function setPhase(n: number)    { localStorage.setItem(SK_PHASE, String(n)); }
-function getLastClose(): number { return parseInt(localStorage.getItem(SK_LAST_CLOSE) ?? '0', 10); }
-function setLastClose()         { localStorage.setItem(SK_LAST_CLOSE, String(Date.now())); }
-function markDone()             { localStorage.setItem(SK_DONE, '1'); }
-function isDone(): boolean      { return localStorage.getItem(SK_DONE) === '1'; }
+// Safe wrappers — localStorage can throw in incognito/private mode
+function lsGet(k: string): string | null {
+  try { return localStorage.getItem(k); } catch { return null; }
+}
+function lsSet(k: string, v: string) {
+  try { localStorage.setItem(k, v); } catch {}
+}
+function lsRemove(k: string) {
+  try { localStorage.removeItem(k); } catch {}
+}
+function ssGet(k: string): string | null {
+  try { return sessionStorage.getItem(k); } catch { return null; }
+}
+function ssSet(k: string, v: string) {
+  try { sessionStorage.setItem(k, v); } catch {}
+}
+function ssRemove(k: string) {
+  try { sessionStorage.removeItem(k); } catch {}
+}
+
+function getPhase(): number     { return parseInt(lsGet(SK_PHASE) ?? '0', 10); }
+function setPhase(n: number)    { lsSet(SK_PHASE, String(n)); }
+function getLastClose(): number { return parseInt(lsGet(SK_LAST_CLOSE) ?? '0', 10); }
+function setLastClose()         { lsSet(SK_LAST_CLOSE, String(Date.now())); }
+function markDone()             { lsSet(SK_DONE, '1'); }
+function clearDone()            { lsRemove(SK_DONE); }
+function isDone(): boolean      { return lsGet(SK_DONE) === '1'; }
 
 if (typeof window !== 'undefined') {
   (window as any).__resetSteamiPopups = () => {
-    [SK_PHASE, SK_LAST_CLOSE, SK_DONE].forEach(k => localStorage.removeItem(k));
-    try { sessionStorage.removeItem(SK_SESSION); } catch {}
+    [SK_PHASE, SK_LAST_CLOSE, SK_DONE].forEach(lsRemove);
+    ssRemove(SK_SESSION);
     console.log('[STEAMI] Popup state cleared. Reload to restart.');
   };
 }
@@ -160,8 +181,10 @@ function getTokens(isDark: boolean): ThemeTokens {
 
 // ─── Floating particles ─ dots + sparkle stars + drift ───────────────────────
 function Particles({ color }: { color: string }) {
+  // Fewer particles on mobile for performance
+  const isMobileParticles = typeof window !== 'undefined' && window.innerWidth < 600;
   // Stable particle config — generated once per mount
-  const dots = useMemo(() => Array.from({ length: 16 }, (_, i) => ({
+  const dots = useMemo(() => Array.from({ length: isMobileParticles ? 6 : 16 }, (_, i) => ({
     id: i,
     x: 5 + (i * 23.7 + 11) % 90,
     y: 5 + (i * 17.3 + 7) % 90,
@@ -452,7 +475,12 @@ function ModalShell({ onClose, children, glowColor, isDark, showClose = true, to
         transition={{ duration: 0.35 }}
         onClick={onClose}
         style={{
-          position: 'fixed', inset: 0, zIndex: 9000,
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          // Also extend behind browser chrome with -webkit-fill-available fallback
+          height: '100%',
+          minHeight: '-webkit-fill-available',
+          zIndex: 9000,
           background: tokens.backdropBg,
           backdropFilter: 'blur(12px)',
         }}
@@ -466,26 +494,42 @@ function ModalShell({ onClose, children, glowColor, isDark, showClose = true, to
         exit={{ opacity: 0, scale: 0.86, y: 32, rotateX: -6 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
         style={{
-          position: 'fixed', inset: 0, zIndex: 9001,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '16px',
+          position: 'fixed',
+          // Use dvh so the popup avoids browser chrome on mobile Firefox/Safari
+          top: 0, left: 0, right: 0,
+          height: '100dvh',
+          zIndex: 9001,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          // Safe-area insets keep content away from notch/home bar/browser nav
+          padding: 'max(env(safe-area-inset-top, 8px), 8px) max(env(safe-area-inset-right, 12px), 12px) max(env(safe-area-inset-bottom, 8px), 8px) max(env(safe-area-inset-left, 12px), 12px)',
           pointerEvents: 'none',
-        }}
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          boxSizing: 'border-box',
+        } as React.CSSProperties}
       >
         <div
+          className="steami-popup-card"
           onClick={e => e.stopPropagation()}
           style={{
             pointerEvents: 'all',
             position: 'relative',
             width: '100%',
             maxWidth: 860,
-            // No overflow, no maxHeight scroll — content must fit
+            // maxHeight prevents the card taller than the usable viewport on mobile
+            maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px)',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            // Hide the scrollbar visually while keeping scrollability
+            scrollbarWidth: 'none',
             borderRadius: 24,
             border: `1px solid ${isDark ? `${glowColor}25` : `${glowColor}30`}`,
             background: tokens.bg,
-            backdropFilter: 'blur(40px)',
+            backdropFilter: typeof window !== 'undefined' && window.innerWidth < 600 ? 'blur(8px)' : 'blur(40px)',
             boxShadow: `0 0 80px ${glowColor}22, ${tokens.shadow}, inset 0 1px 0 ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.9)'}`,
-          }}
+          } as React.CSSProperties}
         >
           <Particles color={glowColor} />
           <OrbitRing color={glowColor} />
@@ -562,7 +606,8 @@ function ModalShell({ onClose, children, glowColor, isDark, showClose = true, to
             </button>
           )}
 
-          <div style={{ padding: '36px 28px 26px' }}>
+          <div className="steami-popup-inner" style={{ padding: '36px 28px 26px' }}>
+            <style>{`.steami-popup-inner { padding: clamp(28px, 4vw, 36px) clamp(16px, 4vw, 28px) clamp(16px, 3vw, 26px) !important; }`}</style>
             {children}
           </div>
         </div>
@@ -597,8 +642,24 @@ function PopupLayout({ left, right }: { left: React.ReactNode; right: React.Reac
       <motion.div variants={itemAnim}>{right}</motion.div>
       <style>{`
         @media (max-width: 600px) {
-          .steami-popup-grid { grid-template-columns: 1fr !important; }
+          .steami-popup-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+          /* Reduce mascot size on mobile to save vertical space */
+          .steami-popup-grid svg[width="140"] {
+            width: 90px !important;
+            height: 90px !important;
+          }
+          /* Tighten speech bubble */
+          .steami-popup-grid .steami-speech-bubble {
+            margin-top: 6px !important;
+            padding: 7px 12px !important;
+            font-size: 11px !important;
+          }
         }
+        /* Hide webkit scrollbar on the card */
+        .steami-popup-card::-webkit-scrollbar { display: none; }
         @keyframes ob-shimmer {
           0%   { background-position: -200% center; }
           100% { background-position:  200% center; }
@@ -1417,10 +1478,33 @@ export function OnboardingPopups() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Kill sequence if user logs in
+  // React to auth state changes
+  const prevAuthRef = useRef(isAuthenticated);
   useEffect(() => {
-    if (isAuthenticated) { markDone(); killTimer(); setActivePopup(0); }
-  }, [isAuthenticated, killTimer]);
+    const prev = prevAuthRef.current;
+    prevAuthRef.current = isAuthenticated;
+
+    if (isAuthenticated && !prev) {
+      // Just logged in — stop everything
+      markDone();
+      killTimer();
+      setActivePopup(0);
+    } else if (!isAuthenticated && prev) {
+      // Just logged OUT — clear done flag and restart the 25s sequence
+      clearDone();
+      lsRemove(SK_PHASE);
+      lsRemove(SK_LAST_CLOSE);
+      ssRemove(SK_SESSION); // force fresh session so mount effect re-runs logic
+      killTimer();
+      setActivePopup(0);
+      // Small delay so any AuthModal close animation finishes first
+      setTimeout(() => {
+        if (!isAuthRef.current) {
+          schedule(1, 25_000);
+        }
+      }, 500);
+    }
+  }, [isAuthenticated, killTimer, schedule]);
 
   const handleClose = (phase: 1 | 2 | 3 | 4) => {
     setActivePopup(0);
