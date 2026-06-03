@@ -3,15 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { CardMedia } from '@/components/CardMedia';
 import { CardSvgVisual } from '@/components/CardSvgVisual';
 import { AnimatedSection, AnimatedCard } from '@/components/MotionWrappers';
-import type { BlogPost } from '@/data/blog';
+
+interface Post {
+  id:          string;
+  title:       string;
+  subtitle?:   string;
+  description?: string;
+  field:       string;
+  badgeColor:  string;
+  readingTime: string;
+  coverImage?: string;
+}
 
 interface RelatedPostsProps {
-  posts: BlogPost[];
+  posts: Post[];
 }
 
 export function RelatedPosts({ posts }: RelatedPostsProps) {
   const navigate = useNavigate();
-
   if (posts.length === 0) return null;
 
   return (
@@ -27,16 +36,11 @@ export function RelatedPosts({ posts }: RelatedPostsProps) {
             className="relative cursor-pointer overflow-hidden group flex flex-col"
             onClick={() => navigate(`/blog/${post.id}`)}
           >
-            {/* Accent bar */}
             <div
               className="h-[2px] w-full"
               style={{ background: `linear-gradient(90deg, hsl(var(--steami-${post.badgeColor})) 0%, transparent 100%)` }}
             />
-
-            {/* Image Window via CardMedia */}
             <CardMedia src={post.coverImage} alt={post.title} badgeColor={post.badgeColor} height={160} />
-
-            {/* Content Area */}
             <div className="p-5 flex-1 flex flex-col">
               <div className="flex items-center gap-2 mb-3">
                 <span className={`steami-badge steami-badge-${post.badgeColor} text-[16px] inline-block`}>
@@ -49,7 +53,7 @@ export function RelatedPosts({ posts }: RelatedPostsProps) {
                     {post.title}
                   </h4>
                   <p className="text-[14px] font-medium text-muted-foreground leading-relaxed line-clamp-2 mb-4">
-                    {post.subtitle}
+                    {post.subtitle || post.description || ''}
                   </p>
                 </div>
                 <CardSvgVisual field={post.field} variant="mini" className="hidden sm:flex mt-0.5 shrink-0" />

@@ -16,20 +16,6 @@ const getDeviceType = (): string => {
   return 'desktop';
 };
 
-/**
- * Returns a stable anonymous guest ID for unauthenticated event tracking.
- * Generated once per browser and persisted in localStorage as `steami_guest_id`.
- */
-const getGuestId = (): string => {
-  const KEY = 'steami_guest_id';
-  let id = localStorage.getItem(KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(KEY, id);
-  }
-  return id;
-};
-
 /** Fire-and-forget event when a blog card is clicked — captures intent signal. */
 const logBlogClick = (post: any) => {
   api.dashboard.event({
@@ -37,7 +23,6 @@ const logBlogClick = (post: any) => {
     popup_id:    post.id,
     popup_title: post.title ?? '',
     device_type: getDeviceType(),
-    guest_id:    getGuestId(),
   }).catch(() => {});
 };
 

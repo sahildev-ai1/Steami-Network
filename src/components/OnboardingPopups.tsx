@@ -22,7 +22,7 @@
  * Debug: window.__resetSteamiPopups?.()
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -158,50 +158,124 @@ function getTokens(isDark: boolean): ThemeTokens {
   };
 }
 
-// ─── Floating particles ────────────────────────────────────────────────────────
+// ─── Floating particles ─ dots + sparkle stars + drift ───────────────────────
 function Particles({ color }: { color: string }) {
-  const particles = Array.from({ length: 12 }, (_, i) => ({
+  // Stable particle config — generated once per mount
+  const dots = useMemo(() => Array.from({ length: 16 }, (_, i) => ({
     id: i,
-    x: 10 + Math.random() * 80,
-    y: 10 + Math.random() * 80,
-    size: 2 + Math.random() * 4,
-    delay: Math.random() * 3,
-    duration: 3 + Math.random() * 4,
-  }));
+    x: 5 + (i * 23.7 + 11) % 90,
+    y: 5 + (i * 17.3 + 7) % 90,
+    size: 1.5 + (i % 4) * 1.2,
+    delay: (i * 0.37) % 4,
+    dur: 3.5 + (i % 5) * 0.8,
+    shape: i % 4 === 0 ? 'star' : 'dot',
+  })), []);
+
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', borderRadius: 24 }}>
-      {particles.map(p => (
-        <motion.div
-          key={p.id}
-          style={{
-            position: 'absolute',
-            left: `${p.x}%`, top: `${p.y}%`,
-            width: p.size, height: p.size,
-            borderRadius: '50%',
-            background: color,
-            opacity: 0,
-          }}
-          animate={{ opacity: [0, 0.7, 0], y: [0, -30, -60], scale: [0.5, 1, 0.3] }}
-          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'easeOut' }}
-        />
+      {dots.map(p => (
+        p.shape === 'star' ? (
+          <motion.div
+            key={p.id}
+            style={{
+              position: 'absolute',
+              left: `${p.x}%`, top: `${p.y}%`,
+              fontSize: p.size * 4,
+              color,
+              opacity: 0,
+              lineHeight: 1,
+            }}
+            animate={{
+              opacity: [0, 0.9, 0.4, 0.9, 0],
+              scale: [0.4, 1.3, 0.8, 1.2, 0.4],
+              rotate: [0, 180, 360],
+            }}
+            transition={{ duration: p.dur + 1, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
+          >✦</motion.div>
+        ) : (
+          <motion.div
+            key={p.id}
+            style={{
+              position: 'absolute',
+              left: `${p.x}%`, top: `${p.y}%`,
+              width: p.size, height: p.size,
+              borderRadius: '50%',
+              background: color,
+              opacity: 0,
+            }}
+            animate={{
+              opacity: [0, 0.8, 0.2, 0.7, 0],
+              y: [0, -(20 + p.size * 8), -(40 + p.size * 12)],
+              x: [0, (p.id % 2 === 0 ? 1 : -1) * p.size * 3, 0],
+              scale: [0.3, 1.1, 0.5],
+            }}
+            transition={{ duration: p.dur, delay: p.delay, repeat: Infinity, ease: 'easeOut' }}
+          />
+        )
       ))}
     </div>
   );
 }
 
-// ─── Pulse ring ───────────────────────────────────────────────────────────────
-function PulseRing({ color }: { color: string }) {
+// ─── Orbit ring — rotates around the card ────────────────────────────────────
+function OrbitRing({ color }: { color: string }) {
   return (
     <motion.div
       style={{
-        position: 'absolute', inset: -4,
-        borderRadius: '50%',
-        border: `2px solid ${color}`,
+        position: 'absolute', inset: -3,
+        borderRadius: 27,
+        border: `1px solid ${color}`,
         opacity: 0,
+        pointerEvents: 'none',
       }}
-      animate={{ scale: [1, 1.35], opacity: [0.6, 0] }}
-      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+      animate={{
+        opacity: [0, 0.35, 0.1, 0.35, 0],
+        scale: [0.98, 1.005, 0.98],
+      }}
+      transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
     />
+  );
+}
+
+// ─── Animated gradient backdrop mesh ─────────────────────────────────────────
+function BackdropMesh({ color }: { color: string }) {
+  return (
+    <>
+      <motion.div
+        style={{
+          position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none',
+          background: `radial-gradient(ellipse 60% 50% at 20% 30%, ${color}18 0%, transparent 70%)`,
+        }}
+        animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.04, 1] }}
+        transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        style={{
+          position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none',
+          background: `radial-gradient(ellipse 55% 45% at 80% 70%, ${color}12 0%, transparent 70%)`,
+        }}
+        animate={{ opacity: [1, 0.5, 1], scale: [1.04, 1, 1.04] }}
+        transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+      />
+    </>
+  );
+}
+
+// ─── Pulse rings (two staggered) ─────────────────────────────────────────────
+function PulseRing({ color }: { color: string }) {
+  return (
+    <>
+      <motion.div
+        style={{ position: 'absolute', inset: -4, borderRadius: '50%', border: `2px solid ${color}`, opacity: 0 }}
+        animate={{ scale: [1, 1.45], opacity: [0.7, 0] }}
+        transition={{ duration: 1.9, repeat: Infinity, ease: 'easeOut' }}
+      />
+      <motion.div
+        style={{ position: 'absolute', inset: -4, borderRadius: '50%', border: `1px solid ${color}`, opacity: 0 }}
+        animate={{ scale: [1, 1.7], opacity: [0.4, 0] }}
+        transition={{ duration: 1.9, repeat: Infinity, ease: 'easeOut', delay: 0.55 }}
+      />
+    </>
   );
 }
 
@@ -277,8 +351,11 @@ function Mascot({ color, expression }: MascotProps) {
     <div style={{ position: 'relative', display: 'inline-block' }}>
       <PulseRing color={p.glow} />
       <motion.div
-        animate={{ y: [0, -12, 0, -8, 0], rotate: [-1, 1, -1] }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        animate={{
+          y: [0, -10, 0, -6, 0, -10, 0],
+          rotate: expression === 'curious' ? [-3, 3, -3] : expression === 'sad' ? [-2, -2, 0, -2] : [-1, 1, -1],
+        }}
+        transition={{ duration: expression === 'sad' ? 5 : 4, repeat: Infinity, ease: 'easeInOut' }}
         style={{ filter: `drop-shadow(0 0 32px ${p.glow}88)` }}
       >
         <svg width="140" height="140" viewBox="0 0 106 106" xmlns="http://www.w3.org/2000/svg">
@@ -307,6 +384,15 @@ function Mascot({ color, expression }: MascotProps) {
           <ellipse cx="93" cy="70" rx="10" ry="8" fill={p.body} />
           <ellipse cx="93" cy="70" rx="10" ry="8" fill={`url(#rimGrad-${color})`} />
           <ellipse cx="97" cy="67" rx="3.5" ry="3" fill={p.shine} opacity="0.5" />
+          {/* Blink overlay — covers eyes briefly */}
+          <motion.rect
+            x="26" y="40" width="54" height="18" rx="9"
+            fill={p.body}
+            initial={{ scaleY: 0 }}
+            animate={{ scaleY: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0] }}
+            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', times: [0, 0.88, 0.9, 0.96, 1, 1, 1, 1, 1, 1] }}
+            style={{ transformOrigin: '53px 49px' }}
+          />
         </svg>
       </motion.div>
     </div>
@@ -317,9 +403,9 @@ function Mascot({ color, expression }: MascotProps) {
 function SpeechBubble({ text, color, isDark }: { text: string; color: string; isDark: boolean }) {
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8, y: 8 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ delay: 0.4, type: 'spring', stiffness: 300 }}
+      initial={{ opacity: 0, scale: 0.75, y: 12 }}
+      animate={{ opacity: 1, scale: [1, 1.03, 1], y: [0, -3, 0] }}
+      transition={{ delay: 0.4, type: 'spring', stiffness: 280, damping: 18 }}
       style={{
         background: `${color}${isDark ? '18' : '12'}`,
         border: `1px solid ${color}40`,
@@ -351,29 +437,34 @@ interface ShellProps {
   isDark: boolean;
   showClose?: boolean;
   tokens: ThemeTokens;
+  extraBg?: React.ReactNode;
+  activeIndex?: number; // 1-based which popup is showing
 }
 
-function ModalShell({ onClose, children, glowColor, isDark, showClose = true, tokens }: ShellProps) {
+function ModalShell({ onClose, children, glowColor, isDark, showClose = true, tokens, extraBg, activeIndex = 1 }: ShellProps) {
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop with animated mesh */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: 0.35 }}
         onClick={onClose}
         style={{
           position: 'fixed', inset: 0, zIndex: 9000,
           background: tokens.backdropBg,
-          backdropFilter: 'blur(10px)',
+          backdropFilter: 'blur(12px)',
         }}
-      />
+      >
+        <BackdropMesh color={glowColor} />
+      </motion.div>
       {/* Card wrapper — no overflow so RunawayButton can portal outside */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.88, y: 40 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.88, y: 24 }}
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        initial={{ opacity: 0, scale: 0.82, y: 56, rotateX: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+        exit={{ opacity: 0, scale: 0.86, y: 32, rotateX: -6 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
         style={{
           position: 'fixed', inset: 0, zIndex: 9001,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -397,6 +488,8 @@ function ModalShell({ onClose, children, glowColor, isDark, showClose = true, to
           }}
         >
           <Particles color={glowColor} />
+          <OrbitRing color={glowColor} />
+          {extraBg}
 
           {/* Glow blobs */}
           <div style={{
@@ -410,22 +503,34 @@ function ModalShell({ onClose, children, glowColor, isDark, showClose = true, to
             filter: 'blur(48px)', pointerEvents: 'none',
           }} />
 
-          {/* Progress dots */}
+          {/* Progress dots — active one is larger and solid */}
           <div style={{
-            position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)',
-            display: 'flex', gap: 6,
+            position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+            display: 'flex', gap: 7, alignItems: 'center',
           }}>
-            {[1,2,3,4].map(n => (
-              <motion.div
-                key={n}
-                style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: glowColor,
-                }}
-                animate={{ opacity: [0.25, 1, 0.25], scale: [0.8, 1.2, 0.8] }}
-                transition={{ duration: 2, delay: n * 0.2, repeat: Infinity }}
-              />
-            ))}
+            {[1,2,3,4].map(n => {
+              const isActive = n === activeIndex;
+              const isPast   = n < activeIndex;
+              return (
+                <motion.div
+                  key={n}
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={isActive
+                    ? { scale: [1, 1.3, 1], opacity: 1, width: 20 }
+                    : { scale: 1, opacity: isPast ? 0.9 : 0.3, width: 6 }
+                  }
+                  transition={isActive
+                    ? { scale: { duration: 1.6, repeat: Infinity }, width: { duration: 0.3 } }
+                    : { duration: 0.3 }
+                  }
+                  style={{
+                    height: 6, borderRadius: 4,
+                    background: isActive ? glowColor : (isPast ? glowColor : glowColor),
+                    boxShadow: isActive ? `0 0 8px ${glowColor}` : 'none',
+                  }}
+                />
+              );
+            })}
           </div>
 
           {/* Close button */}
@@ -469,11 +574,11 @@ function ModalShell({ onClose, children, glowColor, isDark, showClose = true, to
 // ─── Shared layout ────────────────────────────────────────────────────────────
 const containerAnim = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.07 } },
+  show: { transition: { staggerChildren: 0.09, delayChildren: 0.05 } },
 };
 const itemAnim = {
-  hidden: { opacity: 0, y: 18 },
-  show:   { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 22 } },
+  hidden: { opacity: 0, y: 24, scale: 0.96 },
+  show:   { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 280, damping: 20 } },
 };
 
 function PopupLayout({ left, right }: { left: React.ReactNode; right: React.ReactNode }) {
@@ -505,18 +610,36 @@ function PopupLayout({ left, right }: { left: React.ReactNode; right: React.Reac
           60%    { transform: rotate(-4deg) scale(1.02); }
           80%    { transform: rotate(4deg) scale(1.02); }
         }
+        @keyframes ob-glow-pulse {
+          0%,100%{ box-shadow: 0 0 12px currentColor; }
+          50%    { box-shadow: 0 0 32px currentColor, 0 0 60px currentColor; }
+        }
+        @keyframes ob-float-badge {
+          0%,100%{ transform: translateY(0px) rotate(-1deg); }
+          50%    { transform: translateY(-4px) rotate(1deg); }
+        }
       `}</style>
     </motion.div>
   );
 }
 
-// ─── CTA Button ───────────────────────────────────────────────────────────────
+// ─── CTA Button — ripple + glow pulse ────────────────────────────────────────
 function PrimaryBtn({ onClick, children, gradient }: { onClick: () => void; children: React.ReactNode; gradient: string }) {
+  const [ripple, setRipple] = useState<{x:number;y:number;id:number}|null>(null);
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setRipple({ x: e.clientX - rect.left, y: e.clientY - rect.top, id: Date.now() });
+    setTimeout(() => setRipple(null), 600);
+    onClick();
+  };
   return (
     <motion.button
-      onClick={onClick}
-      whileHover={{ scale: 1.04, y: -1 }}
-      whileTap={{ scale: 0.97 }}
+      onClick={handleClick}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, boxShadow: ['0 4px 20px rgba(0,0,0,0.2)', '0 4px 32px rgba(0,0,0,0.35)', '0 4px 20px rgba(0,0,0,0.2)'] }}
+      transition={{ opacity: { delay: 0.6, duration: 0.3 }, boxShadow: { duration: 2, repeat: Infinity } }}
+      whileHover={{ scale: 1.05, y: -2 }}
+      whileTap={{ scale: 0.96 }}
       style={{
         background: gradient,
         border: 'none',
@@ -526,14 +649,29 @@ function PrimaryBtn({ onClick, children, gradient }: { onClick: () => void; chil
         fontWeight: 700,
         fontSize: 14,
         cursor: 'pointer',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
         flex: 1,
         minWidth: 0,
-        backgroundSize: '200% auto',
-        animation: 'ob-shimmer 3s linear infinite',
-        backgroundImage: `${gradient}, linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(255,255,255,0.12) 100%)`,
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
+      {ripple && (
+        <motion.span
+          key={ripple.id}
+          initial={{ scale: 0, opacity: 0.5 }}
+          animate={{ scale: 6, opacity: 0 }}
+          transition={{ duration: 0.55, ease: 'easeOut' }}
+          style={{
+            position: 'absolute',
+            left: ripple.x, top: ripple.y,
+            width: 20, height: 20,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.4)',
+            transform: 'translate(-50%,-50%)',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       {children}
     </motion.button>
   );
@@ -587,9 +725,111 @@ function Badge({ text, color, isDark }: { text: string; color: string; isDark: b
         fontWeight: 700,
       }}
     >
-      <motion.span animate={{ rotate: [0, 20, -20, 0] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}>✦</motion.span>
+      <motion.span
+        animate={{ rotate: [0, 180, 360], scale: [1, 1.3, 1] }}
+        transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+      >✦</motion.span>
       {text}
     </motion.span>
+  );
+}
+
+// ─── CountUp number animation ────────────────────────────────────────────────
+function CountUp({ to, delay = 0, color }: { to: number; delay?: number; color: string }) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const start  = Date.now();
+      const dur    = 900;
+      const tick = () => {
+        const t = Math.min((Date.now() - start) / dur, 1);
+        const ease = 1 - Math.pow(1 - t, 3); // ease-out-cubic
+        setVal(Math.round(ease * to));
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, delay * 1000);
+    return () => clearTimeout(timer);
+  }, [to, delay]);
+  return <span style={{ color }}>{val}%</span>;
+}
+
+// ─── TearDrop falling animation (Popup 4) ────────────────────────────────────
+function TearDrops({ color }: { color: string }) {
+  const drops = useMemo(() => Array.from({ length: 8 }, (_, i) => ({
+    id: i,
+    x: 10 + (i * 12.5),
+    delay: i * 0.6,
+    dur: 2.2 + (i % 3) * 0.5,
+    size: 6 + (i % 3) * 3,
+  })), []);
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', borderRadius: 24 }}>
+      {drops.map(d => (
+        <motion.div
+          key={d.id}
+          style={{
+            position: 'absolute',
+            left: `${d.x}%`, top: -20,
+            width: d.size, height: d.size * 1.4,
+            borderRadius: `${d.size * 0.5}px ${d.size * 0.5}px ${d.size * 0.5}px 0`,
+            background: color,
+            opacity: 0,
+            transform: 'rotate(45deg)',
+          }}
+          animate={{ y: ['0vh', '110vh'], opacity: [0, 0.6, 0.6, 0] }}
+          transition={{ duration: d.dur, delay: d.delay, repeat: Infinity, ease: 'easeIn' }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Knowledge web SVG (Popup 3) ─────────────────────────────────────────────
+function KnowledgeWeb({ color }: { color: string }) {
+  const nodes = [
+    { x: 50, y: 50, label: 'AI' },
+    { x: 20, y: 25, label: 'Physics' },
+    { x: 80, y: 25, label: 'Bio' },
+    { x: 15, y: 70, label: 'Math' },
+    { x: 85, y: 70, label: 'Space' },
+    { x: 50, y: 88, label: 'Eng' },
+  ];
+  const edges = [[0,1],[0,2],[0,3],[0,4],[0,5],[1,2],[3,5],[4,5],[1,3],[2,4]];
+  return (
+    <svg viewBox="0 0 100 100" style={{ width: '100%', height: 90, display: 'block' }}>
+      {edges.map(([a, b], i) => (
+        <motion.line
+          key={i}
+          x1={nodes[a].x} y1={nodes[a].y}
+          x2={nodes[b].x} y2={nodes[b].y}
+          stroke={color} strokeWidth="0.5" strokeOpacity="0.4"
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ delay: 0.6 + i * 0.08, duration: 0.5 }}
+        />
+      ))}
+      {nodes.map((n, i) => (
+        <motion.g key={i}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.4 + i * 0.1, type: 'spring', stiffness: 300 }}
+          style={{ transformOrigin: `${n.x}px ${n.y}px` }}
+        >
+          <motion.circle
+            cx={n.x} cy={n.y} r={i === 0 ? 9 : 6}
+            fill={color} fillOpacity={i === 0 ? 0.25 : 0.15}
+            stroke={color} strokeWidth="0.8" strokeOpacity="0.7"
+            animate={{ r: i === 0 ? [9, 10.5, 9] : [6, 7, 6] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}
+          />
+          <text x={n.x} y={n.y + 1} textAnchor="middle" dominantBaseline="middle"
+            fontSize={i === 0 ? 4.5 : 3.5} fill={color} fillOpacity={0.9} fontWeight="bold">
+            {n.label}
+          </text>
+        </motion.g>
+      ))}
+    </svg>
   );
 }
 
@@ -609,9 +849,10 @@ function FeatureCard({ icon, title, desc, tokens, delay = 0 }: { icon: string; t
       }}
     >
       <motion.span
-        animate={{ rotate: [0, -8, 8, 0] }}
-        transition={{ duration: 3, delay: delay + 1, repeat: Infinity, repeatDelay: 4 }}
-        style={{ fontSize: 20, flexShrink: 0 }}
+        animate={{ rotate: [0, -10, 10, -5, 5, 0], scale: [1, 1.1, 1] }}
+        transition={{ duration: 2.5, delay: delay + 0.8, repeat: Infinity, repeatDelay: 3.5 }}
+        whileHover={{ scale: 1.35, rotate: 15 }}
+        style={{ fontSize: 20, flexShrink: 0, display: 'inline-block' }}
       >{icon}</motion.span>
       <div>
         <p style={{ margin: 0, color: tokens.text, fontSize: 13, fontWeight: 600 }}>{title}</p>
@@ -775,7 +1016,7 @@ function RunawayButton({ onClose, lockMs = 15000, glowColor }: { onClose: () => 
 function Popup1({ onContinue, onClose, isDark }: { onContinue: () => void; onClose: () => void; isDark: boolean }) {
   const tokens = getTokens(isDark);
   return (
-    <ModalShell onClose={onClose} glowColor="#00d9ff" isDark={isDark} tokens={tokens}>
+    <ModalShell onClose={onClose} glowColor="#00d9ff" isDark={isDark} tokens={tokens} activeIndex={1}>
       <PopupLayout
         left={<>
           <Mascot color="cyan" expression="wink" />
@@ -794,11 +1035,17 @@ function Popup1({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
         right={<div>
           <Badge text="Before you disappear into the internet…" color="#00d9ff" isDark={isDark} />
           <motion.h2
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            initial={{ opacity: 0, y: 14, filter: 'blur(4px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            transition={{ delay: 0.2, duration: 0.5 }}
             style={{ fontSize: 26, fontWeight: 800, color: tokens.text, margin: '0 0 10px', lineHeight: 1.25 }}
           >
             Let me build your personal<br />
-            <span style={{ color: '#00d9ff' }}>scientific intelligence profile.</span>
+            <motion.span
+              style={{ color: '#00d9ff', display: 'inline-block' }}
+              animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+              transition={{ duration: 4, repeat: Infinity }}
+            >scientific intelligence profile.</motion.span>
           </motion.h2>
           <motion.p
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
@@ -806,7 +1053,18 @@ function Popup1({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
           >
             Discover what fascinates you across AI, Biology, Physics, Space, Engineering and Medicine.
           </motion.p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 18 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 18, position: 'relative' }}>
+            {/* Scan line sweeps down the list */}
+            <motion.div
+              style={{
+                position: 'absolute', left: 0, right: 0, height: 2,
+                background: 'linear-gradient(90deg, transparent, #00d9ff88, transparent)',
+                borderRadius: 2, pointerEvents: 'none', zIndex: 2,
+              }}
+              initial={{ top: 0, opacity: 0 }}
+              animate={{ top: ['0%', '100%', '100%'], opacity: [0, 0.8, 0] }}
+              transition={{ duration: 2.5, delay: 0.5, repeat: Infinity, repeatDelay: 4, ease: 'linear' }}
+            />
             {[
               ['🧠', 'Intelligence Profile',      'Track your curiosity and knowledge growth.',         0.35],
               ['🌌', 'Knowledge Map',              'Visualize hidden connections between STEM domains.', 0.42],
@@ -833,7 +1091,7 @@ function Popup1({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
 function Popup2({ onContinue, onClose, isDark }: { onContinue: () => void; onClose: () => void; isDark: boolean }) {
   const tokens = getTokens(isDark);
   return (
-    <ModalShell onClose={onClose} glowColor="#f59e0b" isDark={isDark} tokens={tokens}>
+    <ModalShell onClose={onClose} glowColor="#f59e0b" isDark={isDark} tokens={tokens} activeIndex={2}>
       <PopupLayout
         left={<>
           <Mascot color="amber" expression="curious" />
@@ -847,7 +1105,13 @@ function Popup2({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
               borderRadius: 999, padding: '5px 14px', fontSize: 12,
               color: isDark ? '#fde68a' : '#b45309',
             }}
-          >🥺 Wait...</motion.div>
+          >
+            <motion.span
+              animate={{ x: [-2, 2, -2] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ display: 'inline-block' }}
+            >🥺</motion.span> Wait...
+          </motion.div>
         </>}
         right={<div>
           <Badge text="Personalization Detected" color="#f59e0b" isDark={isDark} />
@@ -871,8 +1135,21 @@ function Popup2({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span style={{ color: tokens.text, fontSize: 12, fontWeight: 700 }}>Personal Intelligence Profile</span>
-              <span style={{ background: isDark ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.12)', color: '#f59e0b', borderRadius: 999, padding: '2px 9px', fontSize: 10 }}>12% Discovered</span>
+              <span style={{ color: tokens.text, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <motion.span
+                  style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }}
+                  animate={{ scale: [1, 1.6, 1], opacity: [1, 0.4, 1] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                />
+                Personal Intelligence Profile
+              </span>
+              <motion.span
+                initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.5, type: 'spring' }}
+                style={{ background: isDark ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.12)', color: '#f59e0b', borderRadius: 999, padding: '2px 9px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <CountUp to={12} delay={0.6} color="#f59e0b" /> Discovered
+              </motion.span>
             </div>
             {[['Artificial Intelligence','80%'],['Physics','65%'],['Biology','45%'],['Emerging Research','70%']].map(([label, width], i) => (
               <div key={label} style={{ marginBottom: 8 }}>
@@ -903,7 +1180,7 @@ function Popup2({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
 function Popup3({ onContinue, onClose, isDark }: { onContinue: () => void; onClose: () => void; isDark: boolean }) {
   const tokens = getTokens(isDark);
   return (
-    <ModalShell onClose={onClose} glowColor="#7c3aed" isDark={isDark} tokens={tokens}>
+    <ModalShell onClose={onClose} glowColor="#7c3aed" isDark={isDark} tokens={tokens} activeIndex={3}>
       <PopupLayout
         left={<>
           <Mascot color="purple" expression="surprised" />
@@ -940,23 +1217,43 @@ function Popup3({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
               borderRadius: 14, padding: 14, marginBottom: 14,
             }}
           >
+            <KnowledgeWeb color="#a78bfa" />
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
               <span style={{ color: tokens.text, fontSize: 12, fontWeight: 700 }}>YOUR INTELLIGENCE PROFILE</span>
-              <span style={{ color: '#a78bfa', fontSize: 10, background: isDark ? 'rgba(124,58,237,0.2)' : 'rgba(124,58,237,0.1)', padding: '2px 8px', borderRadius: 999 }}>Profile forming…</span>
+              <motion.span
+                animate={{ opacity: [1, 0.4, 1] }}
+                transition={{ duration: 1.4, repeat: Infinity }}
+                style={{ color: '#a78bfa', fontSize: 10, background: isDark ? 'rgba(124,58,237,0.2)' : 'rgba(124,58,237,0.1)', padding: '2px 8px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a78bfa', display: 'inline-block' }} />
+                Profile forming…
+              </motion.span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[['Research Depth','82%'],['Field Diversity','74%'],['Cross-Domain Thinking','91%'],['Knowledge Growth','68%']].map(([label, val], i) => (
                 <motion.div
                   key={label}
-                  initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.5 + i * 0.08, type: 'spring' }}
+                  initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ delay: 0.5 + i * 0.1, type: 'spring', stiffness: 300, damping: 20 }}
+                  whileHover={{ scale: 1.05, borderColor: '#a78bfa' }}
                   style={{
                     background: tokens.card, border: `1px solid ${tokens.cardBorder}`,
-                    borderRadius: 10, padding: '9px 11px',
+                    borderRadius: 10, padding: '9px 11px', cursor: 'default',
+                    transition: 'border-color 0.2s',
                   }}
                 >
-                  <p style={{ margin: 0, color: '#a78bfa', fontSize: 18, fontWeight: 800 }}>{val}</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+                    <CountUp to={parseInt(val)} delay={0.5 + i * 0.1} color="#a78bfa" />
+                  </p>
                   <p style={{ margin: 0, color: tokens.textMuted, fontSize: 10, marginTop: 2 }}>{label}</p>
+                  {/* Mini sparkle that fires once */}
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: [0, 1, 0], scale: [0, 1.4, 0], rotate: [0, 180] }}
+                    transition={{ delay: 1.2 + i * 0.15, duration: 0.6 }}
+                    style={{ position: 'absolute', top: 4, right: 6, fontSize: 10, color: '#a78bfa' }}
+                  >✦</motion.span>
                 </motion.div>
               ))}
             </div>
@@ -977,7 +1274,7 @@ function Popup3({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
 function Popup4({ onContinue, onClose, isDark }: { onContinue: () => void; onClose: () => void; isDark: boolean }) {
   const tokens = getTokens(isDark);
   return (
-    <ModalShell onClose={() => {}} showClose={false} glowColor="#2563eb" isDark={isDark} tokens={tokens}>
+    <ModalShell onClose={() => {}} showClose={false} glowColor="#2563eb" isDark={isDark} tokens={tokens} extraBg={<TearDrops color="rgba(96,165,250,0.18)" />} activeIndex={4}>
       <PopupLayout
         left={<>
           <Mascot color="blue" expression="sad" />
@@ -1027,14 +1324,36 @@ function Popup4({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
                     borderRadius: 10, padding: '10px 6px', textAlign: 'center',
                   }}
                 >
-                  <span style={{ fontSize: 20 }}>{icon}</span>
+                  <motion.span
+                    style={{ fontSize: 20, display: 'inline-block' }}
+                    whileHover={{ scale: 1.4, rotate: [0, -10, 10, 0] }}
+                    transition={{ duration: 0.35 }}
+                    animate={{ scale: [1, 1.08, 1] }}
+                  >{icon}</motion.span>
                   <span style={{ color: tokens.textMuted, fontSize: 10, lineHeight: 1.3 }}>{t}</span>
                 </motion.div>
               ))}
             </div>
           </motion.div>
           {/* Only the register button stays inside the popup */}
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.65 }}
+            style={{ position: 'relative' }}
+          >
+            {/* Heartbeat glow rings */}
+            {[0, 0.4, 0.8].map((d, i) => (
+              <motion.div
+                key={i}
+                style={{
+                  position: 'absolute', inset: -3, borderRadius: 17,
+                  border: '1.5px solid #60a5fa',
+                  opacity: 0, pointerEvents: 'none',
+                }}
+                animate={{ scale: [1, 1.08, 1.18], opacity: [0.6, 0.2, 0] }}
+                transition={{ duration: 1.4, repeat: Infinity, delay: d, ease: 'easeOut' }}
+              />
+            ))}
             <PrimaryBtn onClick={onContinue} gradient="linear-gradient(135deg,#0ea5e9,#2563eb)">
               💙 Save My Spot
             </PrimaryBtn>
