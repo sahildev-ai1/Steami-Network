@@ -9,6 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { CursorEffect } from "@/components/CursorEffect";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { RelatedContentFloatingPanel } from "@/components/RelatedContentFloatingPanel";
+import { OnboardingPopups } from '@/components/OnboardingPopups';
 
 // ─── Lazy-loaded pages ────────────────────────────────────────────────────────
 // Each page becomes its own JS chunk — only downloaded when the user visits it.
@@ -114,6 +115,7 @@ const App = () => (
       <BrowserRouter>
         <ScrollToTop />
         <AnimatedRoutes />
+        <OnboardingPopups />
         <GlobalOverlays />
       </BrowserRouter>
       <Analytics />

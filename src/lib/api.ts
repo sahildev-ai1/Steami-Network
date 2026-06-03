@@ -304,6 +304,13 @@ export const api = {
       formData.append("image", file);
       return apiRequest(`/api/blog/${encodeURIComponent(id)}/cover-image`, { method: "POST", formData });
     },
+    /** POST /api/blog/content-image — upload an inline image inserted into the
+     *  RichTextEditor body and get back a permanent Cloudinary CDN URL.
+     *  Called immediately when the user picks/drops/pastes an image so the
+     *  saved markdown stores https://res.cloudinary.com/... not a blob: URL.
+     */
+    uploadBlogContentImage: (formData: FormData) =>
+      apiRequest<{ url: string }>("/api/blog/content-image", { method: "POST", formData }),
     cmsExplainers: () => apiRequest("/api/cms/explainers"),
     cmsExplainer: (id: string) => apiRequest(`/api/cms/explainers/${encodeURIComponent(id)}`),
     cmsResearch: () => apiRequest("/api/cms/research"),

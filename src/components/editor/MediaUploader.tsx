@@ -1,9 +1,10 @@
 import * as React from "react";
-import { Image, Upload, X, Link } from "lucide-react";
+import { Upload, X, Link } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MediaUploaderProps {
-  onImageSelect: (base64: string, filename: string) => void;
+  // file: blob URL + original File object so the editor can upload it to Cloudinary
+  onImageSelect: (blobUrl: string, filename: string, file: File) => void;
   onUrlInsert: (url: string) => void;
   isOpen: boolean;
   onClose: () => void;
@@ -18,13 +19,8 @@ export function MediaUploader({ onImageSelect, onUrlInsert, isOpen, onClose }: M
   if (!isOpen) return null;
 
   const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
+    e.preventDefault(); e.stopPropagation();
+    setDragActive(e.type === "dragenter" || e.type === "dragover");
   };
 
   const processFile = (file: File) => {
@@ -32,48 +28,28 @@ export function MediaUploader({ onImageSelect, onUrlInsert, isOpen, onClose }: M
       setError("Please upload an image file");
       return;
     }
-
-    try {
-      const url = URL.createObjectURL(file);
-      onImageSelect(url, file.name);
-      onClose();
-    } catch {
-      setError("Failed to read image file");
-    }
+    // Pass the File object so RichTextEditor can upload to Cloudinary
+    const blobUrl = URL.createObjectURL(file);
+    onImageSelect(blobUrl, file.name, file);
+    onClose();
   };
 
   const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    setError("");
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
-    }
+    e.preventDefault(); e.stopPropagation();
+    setDragActive(false); setError("");
+    if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0]);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    setError("");
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
-    }
-  };
-
-  const onButtonClick = () => {
-    fileInputRef.current?.click();
+    e.preventDefault(); setError("");
+    if (e.target.files?.[0]) processFile(e.target.files[0]);
   };
 
   const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!urlValue.trim()) {
-      setError("URL is required");
-      return;
-    }
+    if (!urlValue.trim()) { setError("URL is required"); return; }
     onUrlInsert(urlValue);
-    setUrlValue("");
-    onClose();
+    setUrlValue(""); onClose();
   };
 
   return (
@@ -86,72 +62,55 @@ export function MediaUploader({ onImageSelect, onUrlInsert, isOpen, onClose }: M
           <X className="h-4 w-4" />
         </button>
 
-        <h3 className="font-serif text-[18px] font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70">
+        <h3 className="font-serif text-[18px] font-bold mb-1 text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70">
           Insert Image
         </h3>
+        <p className="text-[11px] text-muted-foreground mb-4">
+          Files are uploaded to Cloudinary and stored permanently.
+        </p>
 
         <div className="space-y-4">
           {/* Dropzone */}
           <div
-            onDragEnter={handleDrag}
-            onDragOver={handleDrag}
-            onDragLeave={handleDrag}
-            onDrop={handleDrop}
-            onClick={onButtonClick}
+            onDragEnter={handleDrag} onDragOver={handleDrag}
+            onDragLeave={handleDrag} onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
             className={cn(
               "group relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-white/10 bg-white/[0.01] px-6 py-8 text-center cursor-pointer transition-all hover:bg-white/[0.03] hover:border-steami-cyan/40",
               dragActive && "border-steami-cyan bg-steami-cyan/5 scale-[0.99]",
               error && "border-steami-red/50 bg-steami-red/5"
             )}
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleChange}
-              className="hidden"
-            />
-            
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleChange} className="hidden" />
             <div className={cn(
               "mb-3 rounded-full bg-white/[0.04] p-3 text-muted-foreground transition-all group-hover:scale-110 group-hover:bg-steami-cyan/10 group-hover:text-steami-cyan",
               dragActive && "bg-steami-cyan/20 text-steami-cyan"
             )}>
               <Upload className="h-6 w-6" />
             </div>
-
             <p className="text-[13px] font-medium text-foreground">
               Drag & drop image, or <span className="text-steami-cyan underline group-hover:text-steami-cyan/80">browse</span>
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Supports PNG, JPG, JPEG, WEBP, GIF
-            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">Supports PNG, JPG, JPEG, WEBP, GIF</p>
           </div>
 
           <div className="relative flex items-center justify-center my-2">
             <span className="absolute inset-x-0 h-[1px] bg-white/10"></span>
-            <span className="relative bg-[#030712] px-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              Or
-            </span>
+            <span className="relative bg-[#030712] px-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Or</span>
           </div>
 
           {/* Image URL Form */}
           <form onSubmit={handleUrlSubmit} className="space-y-3">
             <div className="space-y-1">
-              <label className="block text-[11px] text-muted-foreground uppercase tracking-wider">
-                Image URL
-              </label>
+              <label className="block text-[11px] text-muted-foreground uppercase tracking-wider">Image URL</label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <span className="absolute left-3 top-2.5 text-muted-foreground">
                     <Link className="h-4 w-4" />
                   </span>
                   <input
-                    type="text"
-                    value={urlValue}
-                    onChange={(e) => {
-                      setUrlValue(e.target.value);
-                      if (error) setError("");
-                    }}
+                    type="text" value={urlValue}
+                    onChange={(e) => { setUrlValue(e.target.value); if (error) setError(""); }}
                     placeholder="https://example.com/image.jpg"
                     className="w-full rounded-md border border-white/10 bg-white/[0.02] pl-9 pr-3 py-2 text-[13px] text-white focus:outline-none focus:border-steami-cyan/50 focus:ring-1 focus:ring-steami-cyan/30 transition-all"
                   />
@@ -166,9 +125,7 @@ export function MediaUploader({ onImageSelect, onUrlInsert, isOpen, onClose }: M
             </div>
           </form>
 
-          {error && (
-            <p className="text-[11px] text-steami-red text-center">{error}</p>
-          )}
+          {error && <p className="text-[11px] text-steami-red text-center">{error}</p>}
         </div>
       </div>
     </div>
