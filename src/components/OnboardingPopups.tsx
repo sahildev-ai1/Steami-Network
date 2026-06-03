@@ -37,6 +37,16 @@ function setLastClose()          { localStorage.setItem(SK_LAST_CLOSE, String(Da
 function markDone()              { localStorage.setItem(SK_DONE, '1'); }
 function isDone(): boolean       { return localStorage.getItem(SK_DONE) === '1'; }
 
+// Call this from browser console to re-test: window.__resetSteamiPopups?.()
+if (typeof window !== 'undefined') {
+  (window as any).__resetSteamiPopups = () => {
+    localStorage.removeItem(SK_PHASE);
+    localStorage.removeItem(SK_LAST_CLOSE);
+    localStorage.removeItem(SK_DONE);
+    console.log('[STEAMI] Popup state cleared. Reload the page to restart the sequence.');
+  };
+}
+
 // ─── 3-D Mascot via CSS / SVG ─────────────────────────────────────────────────
 // Each popup has its own colour palette + expression
 
@@ -827,67 +837,79 @@ function Popup4({ onContinue, onClose }: { onContinue: () => void; onClose: () =
 // ─── Main orchestrator ────────────────────────────────────────────────────────
 export function OnboardingPopups() {
   const { isAuthenticated } = useAuthStore();
-  const [activePopup, setActivePopup] = useState<0 | 1 | 2 | 3 | 4>(0); // 0 = none
-  const [authOpen, setAuthOpen] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activePopup, setActivePopup] = useState<0 | 1 | 2 | 3 | 4>(0);
+  const [authOpen, setAuthOpen]       = useState(false);
 
-  const clearTimer = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  };
+  // Keep timer ref stable — never changes identity
+  const timerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isAuthRef       = useRef(isAuthenticated);
+  const hasScheduledRef = useRef(false); // prevent double-scheduling on re-renders
 
-  const scheduleNext = useCallback((popup: 1 | 2 | 3 | 4, delay: number) => {
-    clearTimer();
-    timerRef.current = setTimeout(() => {
-      if (!isDone()) setActivePopup(popup);
-    }, delay);
+  // Keep isAuthRef in sync without causing effect re-runs
+  useEffect(() => { isAuthRef.current = isAuthenticated; }, [isAuthenticated]);
+
+  // Stable helpers using refs — safe to call from inside setTimeout
+  const killTimer = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
   }, []);
 
-  useEffect(() => {
-    // If user is authenticated, never show
-    if (isAuthenticated) {
-      markDone();
-      clearTimer();
-      setActivePopup(0);
-      return;
-    }
-    if (isDone()) return;
+  const schedule = useCallback((popup: 1 | 2 | 3 | 4, delayMs: number) => {
+    killTimer();
+    timerRef.current = setTimeout(() => {
+      if (!isAuthRef.current && !isDone()) {
+        setActivePopup(popup);
+      }
+    }, delayMs);
+  }, [killTimer]);
 
-    const phase = getPhase();
+  // One-time mount effect — runs exactly once
+  useEffect(() => {
+    // Already signed in → never show
+    if (isAuthenticated) { markDone(); return; }
+    // Already completed the sequence
+    if (isDone()) return;
+    // Guard against StrictMode double-invoke
+    if (hasScheduledRef.current) return;
+    hasScheduledRef.current = true;
+
+    const phase     = getPhase();
     const lastClose = getLastClose();
-    const now = Date.now();
+    const now       = Date.now();
 
     if (phase === 0) {
-      // First visit — show popup 1 after 25s
-      scheduleNext(1, 25_000);
+      // Very first visit — show popup 1 after 25 s
+      schedule(1, 25_000);
     } else if (phase >= 1 && phase <= 3) {
-      // Subsequent popups — 18s after the last close
-      const nextPopup = (phase + 1) as 2 | 3 | 4;
-      const elapsed = now - lastClose;
-      const remaining = Math.max(0, 18_000 - elapsed);
-      scheduleNext(nextPopup, remaining);
+      // Resume mid-sequence: show next popup 18 s after last close
+      const nextPopup  = (phase + 1) as 2 | 3 | 4;
+      const elapsed    = now - lastClose;
+      const remaining  = Math.max(0, 18_000 - elapsed);
+      schedule(nextPopup, remaining);
     }
-  }, [isAuthenticated, scheduleNext]);
 
-  // Stop immediately on auth
+    return killTimer; // cleanup on unmount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ← intentionally empty: we only want this on mount
+
+  // Kill timer if user logs in at any point
   useEffect(() => {
-    if (isAuthenticated) { markDone(); clearTimer(); setActivePopup(0); }
-  }, [isAuthenticated]);
+    if (isAuthenticated) { markDone(); killTimer(); setActivePopup(0); }
+  }, [isAuthenticated, killTimer]);
 
   const handleClose = (phase: 1 | 2 | 3 | 4) => {
     setActivePopup(0);
     setPhase(phase);
     setLastClose();
     if (phase < 4) {
-      scheduleNext((phase + 1) as 2 | 3 | 4, 18_000);
+      schedule((phase + 1) as 2 | 3 | 4, 18_000);
     } else {
       markDone();
     }
   };
 
   const handleContinue = () => {
-    // Open the AuthModal (register flow)
     setActivePopup(0);
-    clearTimer();
+    killTimer();
     setAuthOpen(true);
   };
 
