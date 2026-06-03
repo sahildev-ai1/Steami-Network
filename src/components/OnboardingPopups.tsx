@@ -388,8 +388,16 @@ function RunawayButton({ onClose, lockMs = 15000 }: { onClose: () => void; lockM
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [locked, setLocked] = useState(true);
   const [countdown, setCountdown] = useState(Math.ceil(lockMs / 1000));
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const isMobile = useRef(window.matchMedia('(pointer: coarse)').matches);
+  const btnRef    = useRef<HTMLButtonElement>(null);
+  // Store pos in a ref so the mousemove handler never goes stale
+  const posRef    = useRef({ x: 0, y: 0 });
+  const lockedRef = useRef(true);
+  const isMobile  = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  );
+
+  // Keep refs in sync with state
+  useEffect(() => { lockedRef.current = locked; }, [locked]);
 
   // Countdown timer
   useEffect(() => {
@@ -398,6 +406,7 @@ function RunawayButton({ onClose, lockMs = 15000 }: { onClose: () => void; lockM
         if (prev <= 1) {
           clearInterval(interval);
           setLocked(false);
+          lockedRef.current = false;
           return 0;
         }
         return prev - 1;
@@ -406,37 +415,36 @@ function RunawayButton({ onClose, lockMs = 15000 }: { onClose: () => void; lockM
     return () => clearInterval(interval);
   }, []);
 
-  // Desktop: flee from cursor
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!locked || isMobile.current || !btnRef.current) return;
-    const btn = btnRef.current;
-    const rect = btn.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const dx = e.clientX - cx;
-    const dy = e.clientY - cy;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 120) {
-      // Flee in the opposite direction
-      const angle = Math.atan2(dy, dx);
-      const flee = 80 + (120 - dist) * 1.5;
-      let nx = pos.x - Math.cos(angle) * flee;
-      let ny = pos.y - Math.sin(angle) * flee;
-      // Keep within viewport with margin
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const margin = 20;
-      nx = Math.max(-rect.left + margin, Math.min(vw - rect.right - margin, nx));
-      ny = Math.max(-rect.top + margin, Math.min(vh - rect.bottom - margin, ny));
-      setPos({ x: nx, y: ny });
-    }
-  }, [locked, pos]);
-
+  // Desktop: flee from cursor — uses refs so handler is registered only once
   useEffect(() => {
     if (isMobile.current) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!lockedRef.current || !btnRef.current) return;
+      const btn  = btnRef.current;
+      const rect = btn.getBoundingClientRect();
+      const cx   = rect.left + rect.width  / 2;
+      const cy   = rect.top  + rect.height / 2;
+      const dx   = e.clientX - cx;
+      const dy   = e.clientY - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 120) {
+        const angle = Math.atan2(dy, dx);
+        const flee  = 80 + (120 - dist) * 1.5;
+        // Use posRef so we read the latest accumulated offset without stale closure
+        let nx = posRef.current.x - Math.cos(angle) * flee;
+        let ny = posRef.current.y - Math.sin(angle) * flee;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const margin = 20;
+        nx = Math.max(-rect.left + margin, Math.min(vw - rect.right - margin, nx));
+        ny = Math.max(-rect.top  + margin, Math.min(vh - rect.bottom - margin, ny));
+        posRef.current = { x: nx, y: ny };
+        setPos({ x: nx, y: ny });
+      }
+    };
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, [handleMouseMove]);
+  }, []); // ← no dependencies: registered once, reads via refs
 
   // Mobile shake animation when tapped while locked
   const [shaking, setShaking] = useState(false);
@@ -841,9 +849,8 @@ export function OnboardingPopups() {
   const [authOpen, setAuthOpen]       = useState(false);
 
   // Keep timer ref stable — never changes identity
-  const timerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isAuthRef       = useRef(isAuthenticated);
-  const hasScheduledRef = useRef(false); // prevent double-scheduling on re-renders
+  const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isAuthRef = useRef(isAuthenticated);
 
   // Keep isAuthRef in sync without causing effect re-runs
   useEffect(() => { isAuthRef.current = isAuthenticated; }, [isAuthenticated]);
@@ -854,23 +861,21 @@ export function OnboardingPopups() {
   }, []);
 
   const schedule = useCallback((popup: 1 | 2 | 3 | 4, delayMs: number) => {
-    killTimer();
+    // Always clear any existing timer first — this is the double-schedule guard
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     timerRef.current = setTimeout(() => {
       if (!isAuthRef.current && !isDone()) {
         setActivePopup(popup);
       }
     }, delayMs);
-  }, [killTimer]);
+  }, []);
 
-  // One-time mount effect — runs exactly once
+  // One-time mount effect
   useEffect(() => {
     // Already signed in → never show
     if (isAuthenticated) { markDone(); return; }
     // Already completed the sequence
     if (isDone()) return;
-    // Guard against StrictMode double-invoke
-    if (hasScheduledRef.current) return;
-    hasScheduledRef.current = true;
 
     const phase     = getPhase();
     const lastClose = getLastClose();
@@ -897,14 +902,18 @@ export function OnboardingPopups() {
   }, [isAuthenticated, killTimer]);
 
   const handleClose = (phase: 1 | 2 | 3 | 4) => {
+    // Set activePopup to 0 first so AnimatePresence can start exit animation,
+    // then schedule the next popup — avoids "Node cannot be found" DOM warning.
     setActivePopup(0);
-    setPhase(phase);
-    setLastClose();
-    if (phase < 4) {
-      schedule((phase + 1) as 2 | 3 | 4, 18_000);
-    } else {
-      markDone();
-    }
+    setTimeout(() => {
+      setPhase(phase);
+      setLastClose();
+      if (phase < 4) {
+        schedule((phase + 1) as 2 | 3 | 4, 18_000);
+      } else {
+        markDone();
+      }
+    }, 0);
   };
 
   const handleContinue = () => {
