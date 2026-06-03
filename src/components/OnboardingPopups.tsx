@@ -674,7 +674,7 @@ function Popup3({ onContinue, onClose }: { onContinue: () => void; onClose: () =
         left={
           <>
             <Mascot color="purple" expression="surprised" />
-            <SpeechBubble text='💬 "You\'re one click away from owning this."' color="#a78bfa" />
+            <SpeechBubble text={"💬 \"You're one click away from owning this.\""} color="#a78bfa" />
             <div style={{
               marginTop: 14,
               background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(167,139,250,0.25)',
@@ -758,7 +758,7 @@ function Popup4({ onContinue, onClose }: { onContinue: () => void; onClose: () =
         left={
           <>
             <Mascot color="blue" expression="sad" />
-            <SpeechBubble text='💙 "I\'ll keep a spot ready for you."' color="#60a5fa" />
+            <SpeechBubble text={"💙 \"I'll keep a spot ready for you.\""} color="#60a5fa" />
             <div style={{
               marginTop: 14,
               background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(96,165,250,0.25)',
