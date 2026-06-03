@@ -32,9 +32,19 @@ import { AuthModal } from '@/components/AuthModal';
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 const SK_PHASE      = 'steami_ob_phase';
 const SK_LAST_CLOSE = 'steami_ob_lclose';
-// NOTE: SK_DONE is now only set when the user actually signs up.
-// The popup loop restarts on each page load if the user never signed up.
-const SK_DONE       = 'steami_ob_done';
+const SK_DONE       = 'steami_ob_done';   // only set when user actually signs up
+const SK_SESSION    = 'steami_ob_session'; // sessionStorage flag — lives per tab/refresh
+
+// ─── Session-aware reset ──────────────────────────────────────────────────────
+// sessionStorage is wiped on every new tab and every page refresh, while
+// localStorage persists. On a fresh session we clear phase & lastClose so the
+// 25-second timer always starts from zero — even if the user left mid-sequence.
+// SK_DONE (signed-up flag) is intentionally never cleared here.
+if (typeof window !== 'undefined' && !sessionStorage.getItem(SK_SESSION)) {
+  localStorage.removeItem(SK_PHASE);
+  localStorage.removeItem(SK_LAST_CLOSE);
+  sessionStorage.setItem(SK_SESSION, '1');
+}
 
 function getPhase(): number     { return parseInt(localStorage.getItem(SK_PHASE) ?? '0', 10); }
 function setPhase(n: number)    { localStorage.setItem(SK_PHASE, String(n)); }
@@ -46,32 +56,40 @@ function isDone(): boolean      { return localStorage.getItem(SK_DONE) === '1'; 
 if (typeof window !== 'undefined') {
   (window as any).__resetSteamiPopups = () => {
     [SK_PHASE, SK_LAST_CLOSE, SK_DONE].forEach(k => localStorage.removeItem(k));
+    try { sessionStorage.removeItem(SK_SESSION); } catch {}
     console.log('[STEAMI] Popup state cleared. Reload to restart.');
   };
 }
 
 // ─── Theme detection ──────────────────────────────────────────────────────────
+// Reads `data-theme` attribute set by theme-store.ts (values: "dark" | "light")
+function readDataTheme(): boolean {
+  if (typeof document === 'undefined') return false;
+  const attr = document.documentElement.getAttribute('data-theme');
+  if (attr === 'dark')  return true;
+  if (attr === 'light') return false;
+  // Fallback: OS preference if attribute not yet set
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 function useTheme() {
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    // Support both Tailwind class strategy and OS preference
-    return document.documentElement.classList.contains('dark') ||
-      window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+  const [isDark, setIsDark] = useState(readDataTheme);
 
   useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains('dark'));
+    // Watch data-theme attribute changes (toggled by useThemeStore)
+    const observer = new MutationObserver(() => setIsDark(readDataTheme()));
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    const mqHandler = (e: MediaQueryListEvent) => {
-      if (!document.documentElement.classList.contains('dark') &&
-          !document.documentElement.classList.contains('light')) {
-        setIsDark(e.matches);
-      }
+
+    // Fallback: OS preference when no attribute is set
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const mqHandler = () => {
+      if (!document.documentElement.hasAttribute('data-theme')) setIsDark(mq.matches);
     };
     mq.addEventListener('change', mqHandler);
+
     return () => { observer.disconnect(); mq.removeEventListener('change', mqHandler); };
   }, []);
 
