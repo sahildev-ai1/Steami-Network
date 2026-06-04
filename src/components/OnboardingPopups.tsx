@@ -117,6 +117,12 @@ function useTheme() {
   return isDark;
 }
 
+// ─── Mobile detection — computed once, never re-queried ─────────────────────
+// We treat ≤768px OR coarse pointer (touch) as "mobile" for perf purposes.
+// This is a module-level constant so no hook overhead.
+const IS_MOBILE: boolean = typeof window !== 'undefined' &&
+  (window.innerWidth <= 768 || window.matchMedia('(pointer: coarse)').matches);
+
 // ─── Theme tokens ─────────────────────────────────────────────────────────────
 interface ThemeTokens {
   bg: string;
@@ -180,11 +186,36 @@ function getTokens(isDark: boolean): ThemeTokens {
 }
 
 // ─── Floating particles ─ dots + sparkle stars + drift ───────────────────────
+// Mobile: zero JS-animated particles — just 3 CSS-only opacity pulses.
+// CSS opacity animations are compositor-thread only: zero paint, zero layout.
+const PARTICLE_CSS = `
+  @keyframes ob-dot-pulse {
+    0%,100% { opacity: 0.08; }
+    50%      { opacity: 0.22; }
+  }
+`;
+
 function Particles({ color }: { color: string }) {
-  // Fewer particles on mobile for performance
-  const isMobileParticles = typeof window !== 'undefined' && window.innerWidth < 600;
-  // Stable particle config — generated once per mount
-  const dots = useMemo(() => Array.from({ length: isMobileParticles ? 6 : 16 }, (_, i) => ({
+  if (IS_MOBILE) {
+    // Three static dots — pure CSS opacity, no JS animation frames at all
+    return (
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', borderRadius: 24 }}>
+        <style>{PARTICLE_CSS}</style>
+        {[{x:15,y:20,s:4,d:0},{x:75,y:35,s:3,d:1.2},{x:50,y:80,s:5,d:2.4}].map((p,i) => (
+          <div key={i} style={{
+            position: 'absolute', left: `${p.x}%`, top: `${p.y}%`,
+            width: p.s, height: p.s, borderRadius: '50%',
+            background: color, opacity: 0.1,
+            animation: `ob-dot-pulse ${3 + i}s ease-in-out ${p.d}s infinite`,
+            willChange: 'opacity',
+          }} />
+        ))}
+      </div>
+    );
+  }
+
+  // Desktop — full animated particles
+  const dots = useMemo(() => Array.from({ length: 16 }, (_, i) => ({
     id: i,
     x: 5 + (i * 23.7 + 11) % 90,
     y: 5 + (i * 17.3 + 7) % 90,
@@ -200,38 +231,15 @@ function Particles({ color }: { color: string }) {
         p.shape === 'star' ? (
           <motion.div
             key={p.id}
-            style={{
-              position: 'absolute',
-              left: `${p.x}%`, top: `${p.y}%`,
-              fontSize: p.size * 4,
-              color,
-              opacity: 0,
-              lineHeight: 1,
-            }}
-            animate={{
-              opacity: [0, 0.9, 0.4, 0.9, 0],
-              scale: [0.4, 1.3, 0.8, 1.2, 0.4],
-              rotate: [0, 180, 360],
-            }}
+            style={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, fontSize: p.size * 4, color, opacity: 0, lineHeight: 1 }}
+            animate={{ opacity: [0, 0.9, 0.4, 0.9, 0], scale: [0.4, 1.3, 0.8, 1.2, 0.4], rotate: [0, 180, 360] }}
             transition={{ duration: p.dur + 1, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
           >✦</motion.div>
         ) : (
           <motion.div
             key={p.id}
-            style={{
-              position: 'absolute',
-              left: `${p.x}%`, top: `${p.y}%`,
-              width: p.size, height: p.size,
-              borderRadius: '50%',
-              background: color,
-              opacity: 0,
-            }}
-            animate={{
-              opacity: [0, 0.8, 0.2, 0.7, 0],
-              y: [0, -(20 + p.size * 8), -(40 + p.size * 12)],
-              x: [0, (p.id % 2 === 0 ? 1 : -1) * p.size * 3, 0],
-              scale: [0.3, 1.1, 0.5],
-            }}
+            style={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, borderRadius: '50%', background: color, opacity: 0 }}
+            animate={{ opacity: [0, 0.8, 0.2, 0.7, 0], y: [0, -(20 + p.size * 8), -(40 + p.size * 12)], x: [0, (p.id % 2 === 0 ? 1 : -1) * p.size * 3, 0], scale: [0.3, 1.1, 0.5] }}
             transition={{ duration: p.dur, delay: p.delay, repeat: Infinity, ease: 'easeOut' }}
           />
         )
@@ -240,43 +248,40 @@ function Particles({ color }: { color: string }) {
   );
 }
 
-// ─── Orbit ring — rotates around the card ────────────────────────────────────
+// ─── Orbit ring — desktop only (border + scale animation = costly on mobile) ──
 function OrbitRing({ color }: { color: string }) {
+  if (IS_MOBILE) return null;
   return (
     <motion.div
-      style={{
-        position: 'absolute', inset: -3,
-        borderRadius: 27,
-        border: `1px solid ${color}`,
-        opacity: 0,
-        pointerEvents: 'none',
-      }}
-      animate={{
-        opacity: [0, 0.35, 0.1, 0.35, 0],
-        scale: [0.98, 1.005, 0.98],
-      }}
+      style={{ position: 'absolute', inset: -3, borderRadius: 27, border: `1px solid ${color}`, opacity: 0, pointerEvents: 'none' }}
+      animate={{ opacity: [0, 0.35, 0.1, 0.35, 0], scale: [0.98, 1.005, 0.98] }}
       transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
     />
   );
 }
 
-// ─── Animated gradient backdrop mesh ─────────────────────────────────────────
+// ─── Animated gradient backdrop mesh — desktop only ──────────────────────────
+// On mobile: static gradient only. Animating scale on a fixed full-screen div
+// forces the browser to repaint the entire viewport every frame.
 function BackdropMesh({ color }: { color: string }) {
+  if (IS_MOBILE) {
+    // Static gradient — one paint, then done. Zero animation cost.
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none',
+        background: `radial-gradient(ellipse 70% 60% at 30% 40%, ${color}14 0%, transparent 70%)`,
+      }} />
+    );
+  }
   return (
     <>
       <motion.div
-        style={{
-          position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none',
-          background: `radial-gradient(ellipse 60% 50% at 20% 30%, ${color}18 0%, transparent 70%)`,
-        }}
+        style={{ position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none', background: `radial-gradient(ellipse 60% 50% at 20% 30%, ${color}18 0%, transparent 70%)` }}
         animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.04, 1] }}
         transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
-        style={{
-          position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none',
-          background: `radial-gradient(ellipse 55% 45% at 80% 70%, ${color}12 0%, transparent 70%)`,
-        }}
+        style={{ position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none', background: `radial-gradient(ellipse 55% 45% at 80% 70%, ${color}12 0%, transparent 70%)` }}
         animate={{ opacity: [1, 0.5, 1], scale: [1.04, 1, 1.04] }}
         transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
       />
@@ -284,8 +289,29 @@ function BackdropMesh({ color }: { color: string }) {
   );
 }
 
-// ─── Pulse rings (two staggered) ─────────────────────────────────────────────
+// ─── Pulse rings ─────────────────────────────────────────────────────────────
+// Mobile: one CSS-only opacity pulse (no scale = no composite layer promotion)
+const PULSE_CSS = `
+  @keyframes ob-ring-pulse {
+    0%,100% { opacity: 0; }
+    40%      { opacity: 0.5; }
+  }
+`;
 function PulseRing({ color }: { color: string }) {
+  if (IS_MOBILE) {
+    return (
+      <>
+        <style>{PULSE_CSS}</style>
+        <div style={{
+          position: 'absolute', inset: -4, borderRadius: '50%',
+          border: `1.5px solid ${color}`,
+          animation: 'ob-ring-pulse 2.5s ease-in-out infinite',
+          willChange: 'opacity',
+          pointerEvents: 'none',
+        }} />
+      </>
+    );
+  }
   return (
     <>
       <motion.div
@@ -373,54 +399,84 @@ function Mascot({ color, expression }: MascotProps) {
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
       <PulseRing color={p.glow} />
-      <motion.div
-        animate={{
-          y: [0, -10, 0, -6, 0, -10, 0],
-          rotate: expression === 'curious' ? [-3, 3, -3] : expression === 'sad' ? [-2, -2, 0, -2] : [-1, 1, -1],
-        }}
-        transition={{ duration: expression === 'sad' ? 5 : 4, repeat: Infinity, ease: 'easeInOut' }}
-        style={{ filter: `drop-shadow(0 0 32px ${p.glow}88)` }}
-      >
-        <svg width="140" height="140" viewBox="0 0 106 106" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <radialGradient id={`bodyGrad-${color}`} cx="40%" cy="35%" r="65%">
-              <stop offset="0%" stopColor={p.shine} stopOpacity="0.9" />
-              <stop offset="45%" stopColor={p.body} />
-              <stop offset="100%" stopColor={p.face} />
-            </radialGradient>
-            <radialGradient id={`rimGrad-${color}`} cx="85%" cy="85%" r="40%">
-              <stop offset="0%" stopColor={p.shine} stopOpacity="0.5" />
-              <stop offset="100%" stopColor={p.body} stopOpacity="0" />
-            </radialGradient>
-          </defs>
-          <ellipse cx="53" cy="96" rx="34" ry="8" fill={p.body} opacity="0.15" />
-          <ellipse cx="53" cy="96" rx="22" ry="5" fill={p.glow} opacity="0.25" />
-          <circle cx="53" cy="52" r="44" fill={`url(#bodyGrad-${color})`} />
-          <circle cx="53" cy="52" r="44" fill={`url(#rimGrad-${color})`} />
-          <ellipse cx="42" cy="30" rx="16" ry="10" fill="white" opacity="0.22" />
-          <ellipse cx="38" cy="26" rx="8" ry="5" fill="white" opacity="0.35" />
-          <circle cx="53" cy="52" r="44" fill="none" stroke={p.shine} strokeWidth="0.5" opacity="0.4" />
-          {expressions[expression]}
-          <ellipse cx="14" cy="70" rx="10" ry="8" fill={p.body} />
-          <ellipse cx="14" cy="70" rx="10" ry="8" fill={`url(#rimGrad-${color})`} />
-          <ellipse cx="10" cy="67" rx="3.5" ry="3" fill={p.shine} opacity="0.5" />
-          <ellipse cx="93" cy="70" rx="10" ry="8" fill={p.body} />
-          <ellipse cx="93" cy="70" rx="10" ry="8" fill={`url(#rimGrad-${color})`} />
-          <ellipse cx="97" cy="67" rx="3.5" ry="3" fill={p.shine} opacity="0.5" />
-          {/* Blink overlay — covers eyes briefly */}
-          <motion.rect
-            x="26" y="40" width="54" height="18" rx="9"
-            fill={p.body}
-            initial={{ scaleY: 0 }}
-            animate={{ scaleY: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0] }}
-            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', times: [0, 0.88, 0.9, 0.96, 1, 1, 1, 1, 1, 1] }}
-            style={{ transformOrigin: '53px 49px' }}
-          />
-        </svg>
-      </motion.div>
+      {IS_MOBILE ? (
+        // ── Mobile: fully static SVG — zero JS animation frames ──
+        <div>
+          <svg width={90} height={90} viewBox="0 0 106 106" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id={`bg-m-${color}`} cx="40%" cy="35%" r="65%">
+                <stop offset="0%" stopColor={p.shine} stopOpacity="0.9" />
+                <stop offset="45%" stopColor={p.body} />
+                <stop offset="100%" stopColor={p.face} />
+              </radialGradient>
+              <radialGradient id={`rim-m-${color}`} cx="85%" cy="85%" r="40%">
+                <stop offset="0%" stopColor={p.shine} stopOpacity="0.5" />
+                <stop offset="100%" stopColor={p.body} stopOpacity="0" />
+              </radialGradient>
+            </defs>
+            <ellipse cx="53" cy="96" rx="34" ry="8" fill={p.body} opacity="0.15" />
+            <ellipse cx="53" cy="96" rx="22" ry="5" fill={p.glow} opacity="0.25" />
+            <circle cx="53" cy="52" r="44" fill={`url(#bg-m-${color})`} />
+            <circle cx="53" cy="52" r="44" fill={`url(#rim-m-${color})`} />
+            <ellipse cx="42" cy="30" rx="16" ry="10" fill="white" opacity="0.22" />
+            <ellipse cx="38" cy="26" rx="8" ry="5" fill="white" opacity="0.35" />
+            {expressions[expression]}
+            <ellipse cx="14" cy="70" rx="10" ry="8" fill={p.body} />
+            <ellipse cx="14" cy="70" rx="10" ry="8" fill={`url(#rim-m-${color})`} />
+            <ellipse cx="93" cy="70" rx="10" ry="8" fill={p.body} />
+            <ellipse cx="93" cy="70" rx="10" ry="8" fill={`url(#rim-m-${color})`} />
+          </svg>
+        </div>
+      ) : (
+        // ── Desktop: floating animation + drop-shadow filter + blink ──
+        <motion.div
+          animate={{
+            y: [0, -10, 0, -6, 0, -10, 0],
+            rotate: expression === 'curious' ? [-3, 3, -3] : expression === 'sad' ? [-2, -2, 0, -2] : [-1, 1, -1],
+          }}
+          transition={{ duration: expression === 'sad' ? 5 : 4, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ filter: `drop-shadow(0 0 32px ${p.glow}88)` }}
+        >
+          <svg width="140" height="140" viewBox="0 0 106 106" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id={`bg-d-${color}`} cx="40%" cy="35%" r="65%">
+                <stop offset="0%" stopColor={p.shine} stopOpacity="0.9" />
+                <stop offset="45%" stopColor={p.body} />
+                <stop offset="100%" stopColor={p.face} />
+              </radialGradient>
+              <radialGradient id={`rim-d-${color}`} cx="85%" cy="85%" r="40%">
+                <stop offset="0%" stopColor={p.shine} stopOpacity="0.5" />
+                <stop offset="100%" stopColor={p.body} stopOpacity="0" />
+              </radialGradient>
+            </defs>
+            <ellipse cx="53" cy="96" rx="34" ry="8" fill={p.body} opacity="0.15" />
+            <ellipse cx="53" cy="96" rx="22" ry="5" fill={p.glow} opacity="0.25" />
+            <circle cx="53" cy="52" r="44" fill={`url(#bg-d-${color})`} />
+            <circle cx="53" cy="52" r="44" fill={`url(#rim-d-${color})`} />
+            <ellipse cx="42" cy="30" rx="16" ry="10" fill="white" opacity="0.22" />
+            <ellipse cx="38" cy="26" rx="8" ry="5" fill="white" opacity="0.35" />
+            <circle cx="53" cy="52" r="44" fill="none" stroke={p.shine} strokeWidth="0.5" opacity="0.4" />
+            {expressions[expression]}
+            <ellipse cx="14" cy="70" rx="10" ry="8" fill={p.body} />
+            <ellipse cx="14" cy="70" rx="10" ry="8" fill={`url(#rim-d-${color})`} />
+            <ellipse cx="10" cy="67" rx="3.5" ry="3" fill={p.shine} opacity="0.5" />
+            <ellipse cx="93" cy="70" rx="10" ry="8" fill={p.body} />
+            <ellipse cx="93" cy="70" rx="10" ry="8" fill={`url(#rim-d-${color})`} />
+            <ellipse cx="97" cy="67" rx="3.5" ry="3" fill={p.shine} opacity="0.5" />
+            <motion.rect
+              x="26" y="40" width="54" height="18" rx="9" fill={p.body}
+              initial={{ scaleY: 0 }}
+              animate={{ scaleY: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', times: [0, 0.88, 0.9, 0.96, 1, 1, 1, 1, 1, 1] }}
+              style={{ transformOrigin: '53px 49px' }}
+            />
+          </svg>
+        </motion.div>
+      )}
     </div>
   );
 }
+
 
 // ─── Speech bubble ────────────────────────────────────────────────────────────
 function SpeechBubble({ text, color, isDark }: { text: string; color: string; isDark: boolean }) {
@@ -489,10 +545,10 @@ function ModalShell({ onClose, children, glowColor, isDark, showClose = true, to
       </motion.div>
       {/* Card wrapper — no overflow so RunawayButton can portal outside */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.82, y: 56, rotateX: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
-        exit={{ opacity: 0, scale: 0.86, y: 32, rotateX: -6 }}
-        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        initial={IS_MOBILE ? { opacity: 0, y: 30 } : { opacity: 0, scale: 0.82, y: 56, rotateX: 8 }}
+        animate={IS_MOBILE ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+        exit={IS_MOBILE ? { opacity: 0, y: 20 } : { opacity: 0, scale: 0.86, y: 32, rotateX: -6 }}
+        transition={{ duration: IS_MOBILE ? 0.28 : 0.45, ease: [0.16, 1, 0.3, 1] }}
         style={{
           position: 'fixed',
           // Use dvh so the popup avoids browser chrome on mobile Firefox/Safari
@@ -527,7 +583,7 @@ function ModalShell({ onClose, children, glowColor, isDark, showClose = true, to
             borderRadius: 24,
             border: `1px solid ${isDark ? `${glowColor}25` : `${glowColor}30`}`,
             background: tokens.bg,
-            backdropFilter: typeof window !== 'undefined' && window.innerWidth < 600 ? 'blur(8px)' : 'blur(40px)',
+            backdropFilter: IS_MOBILE ? 'none' : 'blur(40px)',
             boxShadow: `0 0 80px ${glowColor}22, ${tokens.shadow}, inset 0 1px 0 ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.9)'}`,
           } as React.CSSProperties}
         >
@@ -535,17 +591,11 @@ function ModalShell({ onClose, children, glowColor, isDark, showClose = true, to
           <OrbitRing color={glowColor} />
           {extraBg}
 
-          {/* Glow blobs */}
-          <div style={{
-            position: 'absolute', top: -60, left: -60, width: 200, height: 200,
-            borderRadius: '50%', background: `${glowColor}${isDark ? '1a' : '10'}`,
-            filter: 'blur(48px)', pointerEvents: 'none',
-          }} />
-          <div style={{
-            position: 'absolute', bottom: -60, right: -60, width: 200, height: 200,
-            borderRadius: '50%', background: `${glowColor}${isDark ? '12' : '0c'}`,
-            filter: 'blur(48px)', pointerEvents: 'none',
-          }} />
+          {/* Glow blobs — desktop only; blur filter causes repaint on mobile */}
+          {!IS_MOBILE && <>
+            <div style={{ position: 'absolute', top: -60, left: -60, width: 200, height: 200, borderRadius: '50%', background: `${glowColor}${isDark ? '1a' : '10'}`, filter: 'blur(48px)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: -60, right: -60, width: 200, height: 200, borderRadius: '50%', background: `${glowColor}${isDark ? '12' : '0c'}`, filter: 'blur(48px)', pointerEvents: 'none' }} />
+          </>}
 
           {/* Progress dots — active one is larger and solid */}
           <div style={{
@@ -697,8 +747,8 @@ function PrimaryBtn({ onClick, children, gradient }: { onClick: () => void; chil
     <motion.button
       onClick={handleClick}
       initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0, boxShadow: ['0 4px 20px rgba(0,0,0,0.2)', '0 4px 32px rgba(0,0,0,0.35)', '0 4px 20px rgba(0,0,0,0.2)'] }}
-      transition={{ opacity: { delay: 0.6, duration: 0.3 }, boxShadow: { duration: 2, repeat: Infinity } }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3, duration: 0.3 }}
       whileHover={{ scale: 1.05, y: -2 }}
       whileTap={{ scale: 0.96 }}
       style={{
@@ -815,29 +865,18 @@ function CountUp({ to, delay = 0, color }: { to: number; delay?: number; color: 
   return <span style={{ color }}>{val}%</span>;
 }
 
-// ─── TearDrop falling animation (Popup 4) ────────────────────────────────────
+// ─── TearDrop falling animation (Popup 4) — desktop only ────────────────────
 function TearDrops({ color }: { color: string }) {
+  if (IS_MOBILE) return null; // 8 translating divs is too costly on mobile
   const drops = useMemo(() => Array.from({ length: 8 }, (_, i) => ({
-    id: i,
-    x: 10 + (i * 12.5),
-    delay: i * 0.6,
-    dur: 2.2 + (i % 3) * 0.5,
-    size: 6 + (i % 3) * 3,
+    id: i, x: 10 + (i * 12.5), delay: i * 0.6, dur: 2.2 + (i % 3) * 0.5, size: 6 + (i % 3) * 3,
   })), []);
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', borderRadius: 24 }}>
       {drops.map(d => (
         <motion.div
           key={d.id}
-          style={{
-            position: 'absolute',
-            left: `${d.x}%`, top: -20,
-            width: d.size, height: d.size * 1.4,
-            borderRadius: `${d.size * 0.5}px ${d.size * 0.5}px ${d.size * 0.5}px 0`,
-            background: color,
-            opacity: 0,
-            transform: 'rotate(45deg)',
-          }}
+          style={{ position: 'absolute', left: `${d.x}%`, top: -20, width: d.size, height: d.size * 1.4, borderRadius: `${d.size * 0.5}px ${d.size * 0.5}px ${d.size * 0.5}px 0`, background: color, opacity: 0, transform: 'rotate(45deg)' }}
           animate={{ y: ['0vh', '110vh'], opacity: [0, 0.6, 0.6, 0] }}
           transition={{ duration: d.dur, delay: d.delay, repeat: Infinity, ease: 'easeIn' }}
         />
@@ -846,8 +885,9 @@ function TearDrops({ color }: { color: string }) {
   );
 }
 
-// ─── Knowledge web SVG (Popup 3) ─────────────────────────────────────────────
+// ─── Knowledge web SVG (Popup 3) — desktop only ──────────────────────────────
 function KnowledgeWeb({ color }: { color: string }) {
+  if (IS_MOBILE) return null;
   const nodes = [
     { x: 50, y: 50, label: 'AI' },
     { x: 20, y: 25, label: 'Physics' },
@@ -901,7 +941,7 @@ function FeatureCard({ icon, title, desc, tokens, delay = 0 }: { icon: string; t
       initial={{ opacity: 0, x: 16 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay, type: 'spring', stiffness: 280, damping: 24 }}
-      whileHover={{ scale: 1.02, x: 3 }}
+      whileHover={IS_MOBILE ? undefined : { scale: 1.02, x: 3 }}
       style={{
         display: 'flex', gap: 12, alignItems: 'flex-start',
         background: tokens.card,
@@ -1402,15 +1442,11 @@ function Popup4({ onContinue, onClose, isDark }: { onContinue: () => void; onClo
             transition={{ delay: 0.65 }}
             style={{ position: 'relative' }}
           >
-            {/* Heartbeat glow rings */}
-            {[0, 0.4, 0.8].map((d, i) => (
+            {/* Heartbeat glow rings — desktop only */}
+            {!IS_MOBILE && [0, 0.4, 0.8].map((d, i) => (
               <motion.div
                 key={i}
-                style={{
-                  position: 'absolute', inset: -3, borderRadius: 17,
-                  border: '1.5px solid #60a5fa',
-                  opacity: 0, pointerEvents: 'none',
-                }}
+                style={{ position: 'absolute', inset: -3, borderRadius: 17, border: '1.5px solid #60a5fa', opacity: 0, pointerEvents: 'none' }}
                 animate={{ scale: [1, 1.08, 1.18], opacity: [0.6, 0.2, 0] }}
                 transition={{ duration: 1.4, repeat: Infinity, delay: d, ease: 'easeOut' }}
               />
