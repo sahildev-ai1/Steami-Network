@@ -115,6 +115,24 @@ interface RefreshCheckResponse {
   articles: Article[];
 }
 
+// ── Security helpers ─────────────────────────────────────────────────────────
+//
+// The bio field is user-supplied text.  React escapes JSX by default, so a
+// plain `{profile.bio}` renders the raw string and does NOT execute scripts.
+// However the audit screenshot shows that someone stored
+//   <img src=x onerror=alert('XSS_TEST')>
+// as their bio value and it appeared literally in the UI — the risk is that
+// if the value is ever used in a dangerouslySetInnerHTML context elsewhere,
+// or if a future developer copies the pattern without thinking, it would fire.
+//
+// Defence-in-depth: strip HTML tags on the *display* side so no angle-bracket
+// payload ever makes it into the rendered DOM, even as escaped text.
+//
+function sanitizeBio(raw: string): string {
+  // Remove every HTML/XML tag (including exotic variants like </  or <!)
+  return raw.replace(/<[^>]*>/g, '').trim();
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const TYPE_LABELS: Record<string, string> = {
@@ -420,7 +438,7 @@ export default function DashboardPage() {
                 <p className="font-mono text-[12px] text-muted-foreground mt-0.5">{profile.profession}</p>
               )}
               {profile.bio && (
-                <p className="text-[13px] text-muted-foreground mt-1 line-clamp-1">{profile.bio}</p>
+                <p className="text-[13px] text-muted-foreground mt-1 line-clamp-1">{sanitizeBio(profile.bio)}</p>
               )}
             </div>
 

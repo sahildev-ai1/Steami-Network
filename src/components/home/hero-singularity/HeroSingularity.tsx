@@ -9,9 +9,9 @@
  *  15  – AccretionDiskForeground  (main wave band + near arcs + particles)
  *
  * Sizing:
- *   Event horizon: clamp(260px, 34vw, 380px)
- *   SVG canvas:    700 × 480px (disk tails extend beyond)
- *   Outer shell:   100% width × 520px height
+ *   Mobile portrait  : 300px fixed height
+ *   Mobile landscape : 240px fixed height (stops the canvas eating the full screen)
+ *   Desktop          : 100% of parent, min 400px, max 760px
  *
  * Behavior (wave emission, text fluctuation) lives in
  * HeroElementDistortionProvider — NOT touched here.
@@ -24,10 +24,13 @@ export const HeroSingularity = () => {
   return (
     <div
       className="relative flex items-center justify-center w-full"
-      style={{ 
-        height: '100%', 
-        minHeight: '400px', 
-        maxHeight: '760px', 
+      style={{
+        // Portrait mobile  → 300 px tall
+        // Landscape mobile → 240 px tall  (key fix: was 400px min, so it filled the screen)
+        // ≥ lg breakpoint  → inherit parent height, capped at 760 px
+        height: '100%',
+        minHeight: 'clamp(240px, 40svh, 760px)',
+        maxHeight: '760px',
       }}
     >
       <InteractiveSingularity />

@@ -253,7 +253,7 @@ export function SteamiNav() {
         initial={{ y: -48, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
-        className="fixed top-0 left-0 right-0 h-16 z-50 flex items-center px-4 sm:px-6 md:px-8 gap-3 sm:gap-8 transition-all duration-300"
+        className="fixed top-0 left-0 right-0 h-16 z-50 flex items-center px-4 sm:px-6 md:px-8 gap-2 md:gap-4 transition-all duration-300 overflow-hidden"
         style={{
           background: isLight ? 'rgba(255, 255, 255, 0.72)' : 'rgba(3, 8, 20, 0.75)',
           backdropFilter: 'blur(20px) saturate(180%)',
@@ -277,8 +277,23 @@ export function SteamiNav() {
           </motion.span>
         </Link>
 
-        {/* Desktop nav links */}
-        <div className="hidden md:flex gap-8 ml-4">
+        {/* Desktop nav links
+            BUG FIX: when the user is admin the link list grows to 9 items
+            (HOME + 5 public + DASHBOARD + MOD + ADMIN + API).  The old
+            `gap-8` + `text-[16px]` combo is ~900 px wide, which pushes the
+            right-side icons (bell, theme, avatar/login) completely off-screen
+            on any viewport narrower than ~1280 px, including the dashboard
+            view on tablets.
+
+            Fix:
+              • Container gets `flex-1 min-w-0 overflow-x-auto` so it takes
+                whatever space remains AFTER the right controls and can scroll
+                horizontally if it still overflows.
+              • Each link gets `shrink-0 whitespace-nowrap` so labels don't
+                wrap mid-word.
+              • Font and gap are slightly tighter on md, full size on lg+.
+        */}
+        <div className="hidden md:flex items-center gap-3 lg:gap-5 ml-2 lg:ml-4 min-w-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           {navLinks.map((link, i) => {
             const isActive = location.pathname === link.path;
             return (
@@ -287,12 +302,12 @@ export function SteamiNav() {
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 + i * 0.06, duration: 0.35 }}
-                className="relative flex items-center h-full py-1"
+                className="relative flex items-center h-full py-1 shrink-0"
               >
                 <Link
                   to={link.path}
                   onClick={(e) => { if (isActive) e.preventDefault(); }}
-                  className={`group relative font-mono text-[16px] tracking-[0.12em] uppercase transition-colors duration-200 ease-in-out ${
+                  className={`group relative font-mono text-[13px] lg:text-[15px] tracking-[0.08em] lg:tracking-[0.12em] uppercase whitespace-nowrap transition-colors duration-200 ease-in-out ${
                     isActive ? 'text-steami-cyan' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -308,7 +323,9 @@ export function SteamiNav() {
           })}
         </div>
 
-        <div className="ml-auto flex items-center gap-4">
+        {/* Right-side controls: shrink-0 + ml-auto keeps them pinned to the right
+            and prevents the nav links from ever pushing them off-screen */}
+        <div className="ml-auto flex items-center gap-2 lg:gap-4 shrink-0">
 
           {/* NEWSLETTER — Desktop Subscribe button */}
           <button

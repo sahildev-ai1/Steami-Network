@@ -101,6 +101,13 @@ const AVATAR_CATEGORIES = [
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
+// Strip HTML/XML tags from user-supplied text before saving to the backend.
+// This prevents stored-XSS payloads (e.g. <img src=x onerror=...>) from
+// ever reaching the database or being re-rendered anywhere in the app.
+function sanitizeBio(raw: string): string {
+  return raw.replace(/<[^>]*>/g, '').trim();
+}
+
 const getInitials = (name: string) =>
   name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 
@@ -271,7 +278,8 @@ export default function ProfilePage() {
       const updates: Record<string, string> = {};
       if (fullName.trim())   updates.full_name  = fullName.trim();
       if (username.trim())   updates.username   = username.trim();
-      if (bio.trim())        updates.bio        = bio.trim();
+      // Sanitize bio: strip any HTML tags before saving to prevent stored-XSS
+      if (bio.trim())        updates.bio        = sanitizeBio(bio);
       if (location.trim())   updates.location   = location.trim();
       if (website.trim())    updates.website    = website.trim();
       if (profession.trim()) updates.profession = profession.trim();
