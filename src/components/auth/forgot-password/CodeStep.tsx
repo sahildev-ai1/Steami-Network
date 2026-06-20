@@ -4,11 +4,14 @@ import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
 import { OtpInput } from './OtpInput';
 import { useThemeStore } from '@/stores/theme-store';
 
+const API_BASE = ((import.meta as any).env?.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
 interface CodeStepProps {
   email: string;
   code: string;
   setCode: (code: string) => void;
-  onNext: () => void;
+  /** Called with the backend-issued reset_token once the code verifies. */
+  onNext: (resetToken: string) => void;
   onBack: () => void;
   isLight?: boolean;
 }
@@ -16,6 +19,7 @@ interface CodeStepProps {
 export function CodeStep({ email, code, setCode, onNext, onBack, isLight: propIsLight }: CodeStepProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [success, setSuccess] = useState(false);
   const [cooldown, setCooldown] = useState(59);
   const storeIsLight = useThemeStore((s) => s.theme === 'light');
@@ -33,35 +37,44 @@ export function CodeStep({ email, code, setCode, onNext, onBack, isLight: propIs
     
     setLoading(true);
     setError(false);
-    
-    /**
-     * API-READY HANDLER: verifyCode(email, code)
-     * TODO: Implement verification logic with backend
-     * const { session } = await authService.verifyCode(email, code);
-     */
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Frontend mock verification: accept any 6-digit numeric code
-    if (code.length === 6) {
+    setErrorMessage('');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.reset_token) {
+        throw new Error(data.detail || 'Invalid verification signal. Please check the code and try again.');
+      }
       setSuccess(true);
-      setTimeout(onNext, 800);
-    } else {
+      setTimeout(() => onNext(data.reset_token), 800);
+    } catch (err: any) {
       setError(true);
+      setErrorMessage(err.message || 'Invalid verification signal. Please check the code and try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleResend = async () => {
     if (cooldown > 0) return;
     setLoading(true);
-    
-    /**
-     * TODO: Re-trigger code request
-     * await authService.requestCode(email);
-     */
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setCooldown(59);
-    setLoading(false);
+
+    try {
+      await fetch(`${API_BASE}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      // Non-fatal — cooldown still resets so the user can try again.
+    } finally {
+      setCooldown(59);
+      setLoading(false);
+    }
   };
 
   const maskEmail = (e: string) => {
@@ -98,7 +111,7 @@ export function CodeStep({ email, code, setCode, onNext, onBack, isLight: propIs
       <div className="flex flex-col items-center gap-6 mt-4">
         {error && (
           <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[11px] font-mono text-destructive">
-            Invalid verification signal. Please check the code and try again.
+            {errorMessage || 'Invalid verification signal. Please check the code and try again.'}
           </motion.p>
         )}
 

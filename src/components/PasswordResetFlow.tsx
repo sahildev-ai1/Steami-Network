@@ -4,6 +4,8 @@ import { Mail, Lock, ArrowLeft, ShieldCheck, CheckCircle2, Eye, EyeOff, Loader2 
 import { useThemeStore } from '@/stores/theme-store';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 
+const API_BASE = ((import.meta as any).env?.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
 interface PasswordResetFlowProps {
   onBackToLogin: () => void;
   onSuccess: () => void;
@@ -15,6 +17,7 @@ export function PasswordResetFlow({ onBackToLogin, onSuccess }: PasswordResetFlo
   const [step, setStep] = useState<ResetStep>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -60,13 +63,27 @@ export function PasswordResetFlow({ onBackToLogin, onSuccess }: PasswordResetFlo
 
     setLoading(true);
     setError('');
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setLoading(false);
-    setStep('verify');
-    setResendCooldown(30);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Could not send verification code. Please try again.');
+      }
+      // Backend always returns a generic "sent" message regardless of whether
+      // the email is registered (prevents account enumeration), so we always
+      // advance to the verify step here.
+      setStep('verify');
+      setResendCooldown(30);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerifyCode = async (e: React.FormEvent) => {
@@ -79,12 +96,23 @@ export function PasswordResetFlow({ onBackToLogin, onSuccess }: PasswordResetFlo
     setLoading(true);
     setError('');
 
-    // Simulate API verification
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // For demo purposes, any 6 digit code works
-    setLoading(false);
-    setStep('options');
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.reset_token) {
+        throw new Error(data.detail || 'Invalid or expired code. Please try again.');
+      }
+      setResetToken(data.reset_token);
+      setStep('options');
+    } catch (err: any) {
+      setError(err.message || 'Invalid or expired code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -97,15 +125,30 @@ export function PasswordResetFlow({ onBackToLogin, onSuccess }: PasswordResetFlo
       setError('Passwords do not match.');
       return;
     }
+    if (!resetToken) {
+      setError('Your verification session expired. Please start over.');
+      return;
+    }
 
     setLoading(true);
     setError('');
 
-    // Simulate API update
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    setLoading(false);
-    setStep('success');
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, reset_token: resetToken, new_password: newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.reset) {
+        throw new Error(data.detail || 'Could not update password. Please try again.');
+      }
+      setStep('success');
+    } catch (err: any) {
+      setError(err.message || 'Could not update password. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const maskEmail = (email: string) => {
@@ -267,10 +310,19 @@ export function PasswordResetFlow({ onBackToLogin, onSuccess }: PasswordResetFlo
                   <button
                     type="button"
                     disabled={resendCooldown > 0}
-                    onClick={() => {
+                    onClick={async () => {
                       setResendCooldown(30);
                       setError('');
-                      // Mock resend
+                      try {
+                        await fetch(`${API_BASE}/api/auth/forgot-password`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email }),
+                        });
+                      } catch {
+                        // Non-fatal — the cooldown still applies either way,
+                        // and the user can try "Resend Code" again after it expires.
+                      }
                     }}
                     className="font-mono text-[10px] tracking-wider uppercase text-steami-cyan hover:brightness-110 transition-all disabled:opacity-50 disabled:text-muted-foreground"
                   >

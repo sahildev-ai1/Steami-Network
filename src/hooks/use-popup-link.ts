@@ -5,7 +5,7 @@ type PopupType = "explainer" | "research" | "simulation" | "blog" | "article" | 
 
 const routeForPopup = (type: PopupType, id: string) => {
   const encoded = encodeURIComponent(id);
-  if (type === "explainer") return `/?explainer=${encoded}`;
+  if (type === "explainer") return `/explainers?explainer=${encoded}`;
   if (type === "research") return `/research?research=${encoded}`;
   if (type === "simulation") return `/simulations?simulation=${encoded}`;
   if (type === "blog") return `/blog/${encoded}`;

@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { Mail, ArrowLeft, Loader2 } from 'lucide-react';
 import { useThemeStore } from '@/stores/theme-store';
 
+const API_BASE = ((import.meta as any).env?.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
 interface EmailStepProps {
   email: string;
   setEmail: (email: string) => void;
@@ -31,19 +33,25 @@ export function EmailStep({ email, setEmail, onNext, onBack, isLight: propIsLigh
 
     setLoading(true);
     setError('');
-    
-    /**
-     * API-READY HANDLER: requestCode(email)
-     * TODO: Integrate with backend auth service
-     * await authService.requestCode(email);
-     */
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Generic success message: If this email is linked to an account...
-    // (Handled by moving to next step as requested)
-    
-    setLoading(false);
-    onNext();
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Could not send verification code. Please try again.');
+      }
+      // Backend always responds generically (sent-or-not), regardless of
+      // whether the email is registered — so we always move to the code step.
+      onNext();
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const inputStyle = {

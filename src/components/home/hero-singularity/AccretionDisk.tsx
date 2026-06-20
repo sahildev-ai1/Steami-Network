@@ -136,12 +136,12 @@ export const AccretionDiskBackground = () => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 1.8 }}
-      style={{ zIndex: 1, overflow: 'visible' }}
+      style={{ zIndex: 1, overflow: 'visible', width: '100%', height: '100%' }}
     >
       <svg
         viewBox={`0 0 ${W} 480`}
         className="absolute inset-0 w-full h-full"
-        style={{ overflow: 'visible' }}
+        style={{ overflow: 'visible', minWidth: 0 }}
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
@@ -274,12 +274,12 @@ export const AccretionDiskForeground = () => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 1.8, delay: 0.5 }}
-      style={{ zIndex: 15, overflow: 'visible' }}
+      style={{ zIndex: 15, overflow: 'visible', width: '100%', height: '100%' }}
     >
       <svg
         viewBox={`0 0 ${W} 480`}
         className="absolute inset-0 w-full h-full"
-        style={{ overflow: 'visible' }}
+        style={{ overflow: 'visible', minWidth: 0 }}
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>

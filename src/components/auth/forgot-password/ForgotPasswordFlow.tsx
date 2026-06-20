@@ -19,11 +19,13 @@ export function ForgotPasswordFlow({ onClose, onBackToLogin }: ForgotPasswordFlo
   const [step, setStep] = useState<ForgotPasswordStep>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const isLight = useThemeStore((s) => s.theme === 'light');
 
   const handleContinueToAccount = () => {
-    // Frontend-only: Close flow and show success
-    // In a real app, this would use a recovery session token
+    // Frontend-only shortcut: the user verified their email but chose not to
+    // set a new password. There's no backend session issuance for this path,
+    // so we just close the flow — they log in with their existing password.
     onClose();
   };
 
@@ -51,7 +53,7 @@ export function ForgotPasswordFlow({ onClose, onBackToLogin }: ForgotPasswordFlo
               email={email}
               code={code}
               setCode={setCode}
-              onNext={() => setStep('options')}
+              onNext={(token) => { setResetToken(token); setStep('options'); }}
               onBack={() => setStep('email')}
               isLight={isLight}
             />
@@ -69,6 +71,8 @@ export function ForgotPasswordFlow({ onClose, onBackToLogin }: ForgotPasswordFlo
           {step === 'update-password' && (
             <UpdatePasswordStep
               key="update-password"
+              email={email}
+              resetToken={resetToken}
               onSuccess={() => setStep('success')}
               onBack={() => setStep('options')}
               isLight={isLight}

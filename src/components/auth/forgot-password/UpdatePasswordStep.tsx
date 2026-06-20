@@ -4,13 +4,19 @@ import { Lock, Eye, EyeOff, Loader2, ArrowLeft, CheckCircle2 } from 'lucide-reac
 import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 import { useThemeStore } from '@/stores/theme-store';
 
+const API_BASE = ((import.meta as any).env?.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
 interface UpdatePasswordStepProps {
+  /** Email this reset session belongs to (from EmailStep). */
+  email: string;
+  /** Token returned by the verify-code step — required to complete the reset. */
+  resetToken: string;
   onSuccess: () => void;
   onBack: () => void;
   isLight?: boolean;
 }
 
-export function UpdatePasswordStep({ onSuccess, onBack, isLight: propIsLight }: UpdatePasswordStepProps) {
+export function UpdatePasswordStep({ email, resetToken, onSuccess, onBack, isLight: propIsLight }: UpdatePasswordStepProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,19 +35,30 @@ export function UpdatePasswordStep({ onSuccess, onBack, isLight: propIsLight }: 
       setError('Passwords do not match.');
       return;
     }
+    if (!resetToken) {
+      setError('Your verification session expired. Please start over.');
+      return;
+    }
 
     setLoading(true);
     setError('');
-    
-    /**
-     * API-READY HANDLER: updatePassword(newPassword, confirmPassword)
-     * TODO: Implement password update with backend
-     * await authService.updatePassword(password);
-     */
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setLoading(false);
-    onSuccess();
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, reset_token: resetToken, new_password: password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.reset) {
+        throw new Error(data.detail || 'Could not update password. Please try again.');
+      }
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Could not update password. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isMatch = password && confirmPassword && password === confirmPassword;

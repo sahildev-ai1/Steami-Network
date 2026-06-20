@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useRef, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -6,10 +6,24 @@ import { Analytics } from "@vercel/analytics/react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { CursorEffect } from "@/components/CursorEffect";
 import { ScrollToTop } from "@/components/ScrollToTop";
-import { RelatedContentFloatingPanel } from "@/components/RelatedContentFloatingPanel";
-import { OnboardingPopups } from '@/components/OnboardingPopups';
+
+// ─── Lazy-loaded non-critical overlays ────────────────────────────────────────
+// PERFORMANCE FIX: these were imported eagerly, so their code shipped inside
+// the main entry chunk and executed on every single page load — including
+// the very first paint — even though none of them are actual page content:
+// a custom cursor, an onboarding tour, and a panel that only ever renders on
+// a small subset of routes (and previously loaded its code unconditionally
+// regardless). Lazy-loading keeps all three off the critical path.
+const CursorEffect = lazy(() =>
+  import("@/components/CursorEffect").then((m) => ({ default: m.CursorEffect }))
+);
+const OnboardingPopups = lazy(() =>
+  import("@/components/OnboardingPopups").then((m) => ({ default: m.OnboardingPopups }))
+);
+const RelatedContentFloatingPanel = lazy(() =>
+  import("@/components/RelatedContentFloatingPanel").then((m) => ({ default: m.RelatedContentFloatingPanel }))
+);
 
 // ─── Lazy-loaded pages ────────────────────────────────────────────────────────
 // Each page becomes its own JS chunk — only downloaded when the user visits it.
@@ -52,9 +66,31 @@ const pageTransition = {
 // ─── Animated routes ──────────────────────────────────────────────────────────
 function AnimatedRoutes() {
   const location = useLocation();
+
+  /**
+   * PERFORMANCE FIX (Lighthouse LCP: 7.7s):
+   * Every route mount — including the very first page load — faded in from
+   * opacity:0/scale:0.98 over 300ms via Framer Motion. That's a nice touch
+   * for in-app navigation, but on the initial load it directly delays when
+   * the largest contentful element becomes fully visible, which is exactly
+   * what LCP measures. Skip the enter animation for the first render only;
+   * every subsequent route change still gets the normal transition.
+   */
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    isFirstRender.current = false;
+  }, []);
+
   return (
     <AnimatePresence mode="wait">
-      <motion.div key={location.pathname} {...pageTransition} style={{ minHeight: '100vh' }}>
+      <motion.div
+        key={location.pathname}
+        initial={isFirstRender.current ? false : pageTransition.initial}
+        animate={pageTransition.animate}
+        exit={pageTransition.exit}
+        transition={pageTransition.transition}
+        style={{ minHeight: '100vh' }}
+      >
         {/* Suspense here so each lazy page shows the spinner while its chunk loads */}
         <Suspense fallback={<PageSkeleton />}>
           <Routes location={location}>
@@ -100,7 +136,11 @@ function GlobalOverlays() {
 
   return (
     <>
-      {isContentRoute && <RelatedContentFloatingPanel />}
+      {isContentRoute && (
+        <Suspense fallback={null}>
+          <RelatedContentFloatingPanel />
+        </Suspense>
+      )}
     </>
   );
 }
@@ -111,11 +151,15 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <CursorEffect />
+      <Suspense fallback={null}>
+        <CursorEffect />
+      </Suspense>
       <BrowserRouter>
         <ScrollToTop />
         <AnimatedRoutes />
-        <OnboardingPopups />
+        <Suspense fallback={null}>
+          <OnboardingPopups />
+        </Suspense>
         <GlobalOverlays />
       </BrowserRouter>
       <Analytics />

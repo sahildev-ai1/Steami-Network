@@ -27,8 +27,12 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: clamp(380px, 60vw, 750px);
-  height: clamp(140px, 22vw, 280px);
+  /* Dynamic ring sizing:
+     - was clamp(380px, 60vw, 750px) — the 380px min overflowed on
+       iPhone (375px) and Galaxy Tab A narrow modes
+     - now min is 90vw so it always fits any phone viewport width */
+  width: clamp(min(90vw, 320px), 60vw, 750px);
+  height: clamp(min(33vw, 118px), 22vw, 280px);
   border-radius: 999px;
   transform: translate(-50%, -50%) rotate(-7deg);
   pointer-events: none;

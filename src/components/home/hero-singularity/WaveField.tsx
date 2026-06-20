@@ -27,8 +27,11 @@ export const WaveField = () => {
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: 'clamp(260px, 34vw, 420px)',
-        height: 'clamp(160px, 20vw, 240px)',
+        /* BUG FIX: min was 260px which on a 375px iPhone leaves only
+           115px of margin — and when paired with the ring overlay it
+           caused horizontal overflow. Now min scales with viewport. */
+        width:  'clamp(min(70vw, 260px), 34vw, 420px)',
+        height: 'clamp(min(26vw, 160px), 20vw, 240px)',
         zIndex: 6,
         overflow: 'visible',
       }}

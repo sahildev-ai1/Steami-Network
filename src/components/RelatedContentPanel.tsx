@@ -309,7 +309,7 @@ function ItemRow({ item, tab, hoverBg, fieldClr, onOpenExplainer, onOpenResearch
       ? <button className={cls} style={{ background: 'transparent' }}
           onClick={() => onOpenExplainer(item.id)}
           onMouseEnter={e => on(e, true)} onMouseLeave={e => on(e, false)}>{inner}</button>
-      : <Link to={`/?explainer=${encodeURIComponent(item.id)}`} className={cls}
+      : <Link to={`/explainers?explainer=${encodeURIComponent(item.id)}`} className={cls}
           style={{ background: 'transparent' }}
           onMouseEnter={e => on(e, true)} onMouseLeave={e => on(e, false)}>{inner}</Link>;
   }
