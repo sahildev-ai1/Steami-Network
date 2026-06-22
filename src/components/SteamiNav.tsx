@@ -278,7 +278,7 @@ export function SteamiNav() {
         </Link>
 
         {/* Desktop nav links */}
-        <div className="hidden md:flex gap-8 ml-4">
+        <div className="hidden lg:flex gap-8 ml-4">
           {navLinks.map((link, i) => {
             const isActive = location.pathname === link.path;
             return (
@@ -314,13 +314,13 @@ export function SteamiNav() {
           <button
             onClick={openSubscribeModal}
             title="Subscribe to newsletter"
-            className="hidden md:flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground hover:text-steami-cyan transition-colors"
+            className="hidden lg:flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground hover:text-steami-cyan transition-colors"
           >
             <Mail className="w-3.5 h-3.5" /> Subscribe
           </button>
 
           {/* ── Notification Bell ─────────────────────────────────────────── */}
-          <div className="relative hidden md:block" ref={notifPanelRef}>
+          <div className="relative hidden lg:block" ref={notifPanelRef}>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -524,7 +524,7 @@ export function SteamiNav() {
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              className="hidden md:block"
+              className="hidden lg:block"
             >
               <Link to="/dashboard" className="font-mono text-[10px] tracking-wider uppercase px-3 py-1.5 rounded steami-badge-gold">
                 {diaryCount} NOTES
@@ -533,7 +533,7 @@ export function SteamiNav() {
           )}
 
           {/* User menu / Login */}
-          <div className="hidden md:flex items-center relative">
+          <div className="hidden lg:flex items-center relative">
             {isAuthenticated && user ? (
               <div className="relative">
                 <motion.button
@@ -554,7 +554,7 @@ export function SteamiNav() {
                       </div>
                     )}
                   </div>
-                  <span className="font-mono text-[11px] tracking-wider text-muted-foreground max-w-[80px] truncate hidden lg:block">
+                  <span className="font-mono text-[11px] tracking-wider text-muted-foreground max-w-[80px] truncate hidden xl:block">
                     {formatShortUserName(user.fullName).toUpperCase()}
                   </span>
                   <ChevronDown className="w-3 h-3 text-muted-foreground" />
@@ -628,10 +628,10 @@ export function SteamiNav() {
             )}
           </div>
 
-          {/* Hamburger — mobile */}
+          {/* Hamburger — mobile/landscape */}
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className="md:hidden relative w-8 h-8 flex items-center justify-center focus:outline-none"
+            className="lg:hidden relative w-8 h-8 flex items-center justify-center focus:outline-none"
             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}
           >
