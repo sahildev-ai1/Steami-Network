@@ -1,4 +1,4 @@
-import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { HeroSingularity } from '../home/hero-singularity/HeroSingularity';
 import { HeroElementDistortionProvider, useSingularity } from '../home/hero-singularity/HeroElementDistortionProvider';
 import { ArrowRight, Network } from 'lucide-react';
@@ -44,7 +44,6 @@ export const LandingHero = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isLight = useThemeStore((s) => s.theme === 'light');
-  const { scrollY } = useScroll();
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [hoveredLogo, setHoveredLogo] = useState<string | null>(null);
 
@@ -86,10 +85,6 @@ export const LandingHero = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  const y1 = useTransform(scrollY, [0, 500], [0, 200]);
-  const opacity = useTransform(scrollY, [0, 300], [1, 0]);
-  const scale = useTransform(scrollY, [0, 300], [1, 0.95]);
-
   return (
     <HeroElementDistortionProvider>
       <section className="relative min-h-[min(90svh,_600px)] flex items-center pt-20 md:pt-0 overflow-x-hidden">
@@ -123,7 +118,6 @@ export const LandingHero = () => {
         <div className="container relative z-10 mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center py-8 lg:py-0">
           {/* Left Side: Content */}
           <motion.div
-            style={{ y: y1, opacity, scale }}
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
