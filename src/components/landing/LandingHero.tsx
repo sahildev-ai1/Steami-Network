@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { HeroSingularity } from '../home/hero-singularity/HeroSingularity';
 import { HeroElementDistortionProvider, useSingularity } from '../home/hero-singularity/HeroElementDistortionProvider';
 import { ArrowRight, Network } from 'lucide-react';
@@ -44,6 +44,7 @@ export const LandingHero = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isLight = useThemeStore((s) => s.theme === 'light');
+  const { scrollY } = useScroll();
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [hoveredLogo, setHoveredLogo] = useState<string | null>(null);
 
@@ -85,9 +86,13 @@ export const LandingHero = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
+  const y1 = useTransform(scrollY, [0, 500], [0, 200]);
+  const opacity = useTransform(scrollY, [0, 300], [1, 0]);
+  const scale = useTransform(scrollY, [0, 300], [1, 0.95]);
+
   return (
     <HeroElementDistortionProvider>
-      <section className="relative min-h-[min(90svh,_600px)] flex items-center pt-20 md:pt-0 overflow-x-hidden">
+      <section className="relative flex items-center pt-20 md:pt-0 overflow-x-hidden">
         {/* Mouse Follow Glow - Refined for "Scientific Command Center" vibe in light mode */}
         <motion.div
           className="fixed inset-0 z-0 pointer-events-none"
@@ -115,9 +120,10 @@ export const LandingHero = () => {
           )}
         </div>
 
-        <div className="container relative z-10 mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center py-8 lg:py-0">
+        <div className="container relative z-10 mx-auto px-6 grid grid-cols-1 gap-8 items-center py-8 lg:py-0">
           {/* Left Side: Content */}
           <motion.div
+            style={{ y: y1, opacity, scale }}
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
@@ -314,7 +320,7 @@ export const LandingHero = () => {
             initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
             animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
             transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 }}
-            className="relative flex items-center justify-center w-full
+            className="hidden relative flex items-center justify-center w-full
                        min-h-[280px]
                        md:min-h-[380px]
                        lg:min-h-[520px]
